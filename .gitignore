@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Static export artifacts
+/out*/
+*.zip
+
+# Editor swap files
+*.swp
+*.swo
