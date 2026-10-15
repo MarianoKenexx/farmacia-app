@@ -4,11 +4,15 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
 
 // Cliente admin con service_role_key (bypasea RLS y email confirmation)
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-)
+// Se crea dentro de cada request (no a nivel de módulo) para que el build no falle
+// cuando la variable de entorno no está disponible en tiempo de compilación.
+function getSupabaseAdmin() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
 
 async function getCallerRole(request: NextRequest): Promise<string | null> {
   const cookieStore = await cookies()
@@ -47,7 +51,7 @@ export async function POST(request: NextRequest) {
   }
 
   // Crear en Supabase Auth (email ya confirmado, sin mail de verificación)
-  const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+  const { data: authData, error: authError } = await getSupabaseAdmin().auth.admin.createUser({
     email,
     password,
     email_confirm: true,
@@ -60,7 +64,7 @@ export async function POST(request: NextRequest) {
 
   // El trigger handle_new_user crea el perfil automáticamente.
   // Hacemos upsert para asegurarnos de que quede con todos los datos.
-  const { error: profileError } = await supabaseAdmin
+  const { error: profileError } = await getSupabaseAdmin()
     .from('profiles')
     .upsert({
       id: authData.user.id,
@@ -92,7 +96,7 @@ export async function PATCH(request: NextRequest) {
 
   // Reset de contraseña
   if (password) {
-    const { error } = await supabaseAdmin.auth.admin.updateUserById(id, { password })
+    const { error } = await getSupabaseAdmin().auth.admin.updateUserById(id, { password })
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
   }
 
@@ -104,7 +108,7 @@ export async function PATCH(request: NextRequest) {
   if (active !== undefined) updates.active = active
 
   if (Object.keys(updates).length > 0) {
-    const { error } = await supabaseAdmin.from('profiles').update(updates).eq('id', id)
+    const { error } = await getSupabaseAdmin().from('profiles').update(updates).eq('id', id)
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
   }
 
@@ -122,7 +126,7 @@ export async function DELETE(request: NextRequest) {
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'ID requerido' }, { status: 400 })
 
-  const { error } = await supabaseAdmin.auth.admin.deleteUser(id)
+  const { error } = await getSupabaseAdmin().auth.admin.deleteUser(id)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
   return NextResponse.json({ success: true })
