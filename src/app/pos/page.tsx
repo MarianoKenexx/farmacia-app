@@ -8,7 +8,10 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Search, Trash2, ShoppingCart, CheckCircle, Plus, Minus, Barcode, Package, Pill } from 'lucide-react'
+import { Search, Trash2, ShoppingCart, CheckCircle, Plus, Minus, Barcode, Package, Pill, Printer, Lock } from 'lucide-react'
+import Link from 'next/link'
+import { useAuth } from '@/context/AuthContext'
+import { loadTicketConfig, printTicket, type TicketData } from '@/lib/ticket'
 
 // CartItem extended to track unit price and mode
 interface CartItemExt extends CartItem {
@@ -25,13 +28,30 @@ export default function POSPage() {
   const [processing, setProcessing] = useState(false)
   const [success, setSuccess] = useState(false)
   const [barcodeMsg, setBarcodeMsg] = useState('')
+  const [registerId, setRegisterId] = useState<string | null | undefined>(undefined) // undefined = cargando
+  const [saleError, setSaleError] = useState('')
+  const [lastTicket, setLastTicket] = useState<TicketData | null>(null)
+  const { profile } = useAuth()
   const barcodeRef = useRef<HTMLInputElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetchProducts()
+    fetchRegister()
     barcodeRef.current?.focus()
   }, [])
+
+  async function fetchRegister() {
+    const { data } = await supabase
+      .from('cash_registers')
+      .select('id')
+      .eq('status', 'open')
+      .order('opened_at', { ascending: false })
+      .limit(1)
+    const id = data?.[0]?.id ?? null
+    setRegisterId(id)
+    return id as string | null
+  }
 
   async function fetchProducts() {
     const { data } = await supabase
@@ -156,52 +176,79 @@ export default function POSPage() {
   }
 
   async function handleSale() {
-    if (cart.length === 0) return
+    if (cart.length === 0 || processing) return
     setProcessing(true)
+    setSaleError('')
 
-    const { data: reg } = await supabase
-      .from('cash_registers')
-      .select('id')
-      .eq('status', 'open')
-      .limit(1)
-      .single()
+    // Sin caja abierta no se puede vender: así toda venta queda dentro de un arqueo
+    const regId = await fetchRegister()
+    if (!regId) {
+      setSaleError('La caja está cerrada. Abrila antes de cobrar.')
+      setProcessing(false)
+      return
+    }
 
     const salePayload = {
       subtotal: subtotal - iva,
       tax: iva,
       total,
       payment_method: payMethod,
-      register_id: reg?.id || null,
+      register_id: regId,
       status: 'completed',
     }
 
-    const { data: sale } = await supabase.from('sales').insert(salePayload).select().single()
+    const { data: sale, error } = await supabase.from('sales').insert(salePayload).select().single()
 
-    if (sale) {
-      const items = cart.map(i => ({
-        sale_id: sale.id,
-        product_id: i.product.id,
-        quantity: i.quantity,
-        unit_price: i.unit_price,
-        subtotal: i.subtotal,
-      }))
-      await supabase.from('sale_items').insert(items)
-
-      for (const item of cart) {
-        await supabase.from('products')
-          .update({ stock: parseFloat((item.product.stock - item.quantity).toFixed(4)) })
-          .eq('id', item.product.id)
-
-        await supabase.from('stock_movements').insert({
-          product_id: item.product.id,
-          type: 'salida',
-          quantity: item.quantity,
-          reason: `Venta #${sale.invoice_number}`,
-        })
-      }
+    if (error || !sale) {
+      setSaleError('No se pudo registrar la venta. Revisá la conexión e intentá de nuevo.')
+      setProcessing(false)
+      return
     }
 
+    const items = cart.map(i => ({
+      sale_id: sale.id,
+      product_id: i.product.id,
+      quantity: i.quantity,
+      unit_price: i.unit_price,
+      subtotal: i.subtotal,
+    }))
+    await supabase.from('sale_items').insert(items)
+
+    for (const item of cart) {
+      await supabase.from('products')
+        .update({ stock: parseFloat((item.product.stock - item.quantity).toFixed(4)) })
+        .eq('id', item.product.id)
+
+      await supabase.from('stock_movements').insert({
+        product_id: item.product.id,
+        type: 'salida',
+        quantity: item.quantity,
+        reason: `Venta #${sale.invoice_number}`,
+      })
+    }
+
+    // Ticket
+    const ticket: TicketData = {
+      invoiceNumber: sale.invoice_number,
+      date: new Date(sale.created_at ?? Date.now()),
+      items: cart.map(i => ({
+        name: i.product.name,
+        qtyLabel: fmtQty(i.quantity, i.is_fraccion, i.product),
+        unitPrice: i.unit_price,
+        subtotal: i.subtotal,
+      })),
+      neto: subtotal - iva,
+      iva,
+      total,
+      paymentMethod: payMethod,
+      cashier: profile?.name,
+    }
+    setLastTicket(ticket)
+    const cfg = loadTicketConfig()
+    if (cfg.autoPrint) printTicket(ticket, cfg)
+
     setCart([])
+    setPayMethod('efectivo')
     setProcessing(false)
     setSuccess(true)
     fetchProducts()
@@ -213,7 +260,24 @@ export default function POSPage() {
 
   return (
     <div className="p-6 h-full">
-      <h1 className="text-2xl font-bold text-white mb-4">Punto de Venta</h1>
+      <div className="flex items-center justify-between mb-4 gap-3">
+        <h1 className="text-2xl font-bold text-white">Punto de Venta</h1>
+        {lastTicket && (
+          <button
+            onClick={() => printTicket({ ...lastTicket, reprint: true })}
+            className="flex items-center gap-2 text-sm text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-2 rounded-xl"
+          >
+            <Printer className="w-4 h-4" /> Reimprimir último ticket
+          </button>
+        )}
+      </div>
+
+      {registerId === null && (
+        <div className="mb-4 flex items-center justify-between gap-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded-xl px-4 py-3 text-sm">
+          <span className="flex items-center gap-2"><Lock className="w-4 h-4" /> La caja está cerrada. Para cobrar, primero hay que abrirla.</span>
+          <Link href="/caja" className="font-semibold underline underline-offset-2 hover:text-amber-200">Ir a Caja</Link>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[calc(100vh-140px)]">
         {/* Panel izquierdo */}
@@ -422,6 +486,10 @@ export default function POSPage() {
               </SelectContent>
             </Select>
 
+            {saleError && (
+              <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-2">{saleError}</p>
+            )}
+
             {success ? (
               <Button className="w-full bg-emerald-500 text-white gap-2 py-6" disabled>
                 <CheckCircle className="w-5 h-5" /> ¡Venta registrada!
@@ -430,7 +498,7 @@ export default function POSPage() {
               <Button
                 className="w-full bg-emerald-500 hover:bg-emerald-400 text-white text-base py-6 font-semibold shadow-lg shadow-emerald-500/20"
                 onClick={handleSale}
-                disabled={cart.length === 0 || processing}
+                disabled={cart.length === 0 || processing || registerId === null}
               >
                 {processing ? 'Procesando...' : `Cobrar ${fmt(total)}`}
               </Button>

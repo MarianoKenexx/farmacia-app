@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { ADMIN_ONLY_SECTIONS } from '@/lib/roles'
 import { supabase } from '@/lib/supabase'
 import { Plus, Pencil, Trash2, X, KeyRound, ToggleLeft, ToggleRight } from 'lucide-react'
 import type { Profile, Permissions, SectionKey } from '@/context/AuthContext'
@@ -401,20 +402,23 @@ export default function UsuariosPage() {
                   </label>
                   <div className="grid grid-cols-2 gap-2">
                     {SECTIONS.map(({ key, label, emoji }) => {
-                      const enabled = form.permissions[key]
+                      const soloAdmin = form.role === 'cajero' && (ADMIN_ONLY_SECTIONS as readonly string[]).includes(key)
+                      const enabled = form.permissions[key] && !soloAdmin
                       return (
                         <button
                           key={key}
                           type="button"
+                          disabled={soloAdmin}
+                          title={soloAdmin ? 'Los cajeros no pueden ver esta sección' : undefined}
                           onClick={() => setPermission(key, !enabled)}
-                          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-sm font-medium transition-all ${
+                          className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                             enabled
                               ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
                               : 'bg-slate-900 border-slate-700 text-slate-500 hover:border-slate-600'
                           }`}
                         >
                           <span className="text-base">{emoji}</span>
-                          <span className="flex-1 text-left text-xs">{label}</span>
+                          <span className="flex-1 text-left text-xs">{label}{soloAdmin && <span className="block text-[10px] text-slate-600">Solo administradores</span>}</span>
                           <span className={`w-2 h-2 rounded-full flex-shrink-0 ${enabled ? 'bg-emerald-400' : 'bg-slate-600'}`} />
                         </button>
                       )

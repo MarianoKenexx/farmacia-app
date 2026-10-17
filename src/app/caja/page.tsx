@@ -9,7 +9,8 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { LockOpen, Lock, DollarSign, TrendingUp, Printer } from 'lucide-react'
+import { LockOpen, Lock, DollarSign, TrendingUp, Printer, CheckCircle } from 'lucide-react'
+import { useAuth } from '@/context/AuthContext'
 
 export default function CajaPage() {
   const [register, setRegister] = useState<CashRegister | null>(null)
@@ -19,6 +20,10 @@ export default function CajaPage() {
   const [openDialog, setOpenDialog] = useState(false)
   const [closeDialog, setCloseDialog] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [closedMsg, setClosedMsg] = useState('')
+  const { profile } = useAuth()
+  // Cierre "a ciegas": el cajero no ve cuánto debería haber, solo cuenta y carga el monto.
+  const blind = profile?.role === 'cajero'
 
   useEffect(() => { fetchRegister() }, [])
 
@@ -51,6 +56,7 @@ export default function CajaPage() {
       status: 'open',
     })
     setOpenDialog(false)
+    setClosedMsg('')
     setOpenAmount('')
     fetchRegister()
   }
@@ -63,6 +69,7 @@ export default function CajaPage() {
       status: 'closed',
     }).eq('id', register.id)
     setCloseDialog(false)
+    setClosedMsg(`Caja cerrada. Monto contado registrado: ${fmt(Number(closeAmount))}`)
     setCloseAmount('')
     setRegister(null)
     setSales([])
@@ -100,7 +107,7 @@ export default function CajaPage() {
           <p className="text-sm text-slate-500">Control de apertura, cierre y arqueo</p>
         </div>
         <div className="flex items-center gap-2">
-          {register && (
+          {register && !blind && (
             <Button
               variant="outline"
               className="gap-2"
@@ -139,6 +146,11 @@ export default function CajaPage() {
         <Card>
           <CardContent className="py-16 text-center">
             <Lock className="w-12 h-12 mx-auto text-slate-300 mb-3" />
+            {closedMsg && (
+              <p className="flex items-center justify-center gap-2 text-emerald-500 font-medium mb-3">
+                <CheckCircle className="w-4 h-4" /> {closedMsg}
+              </p>
+            )}
             <p className="text-slate-500 font-medium">La caja está cerrada</p>
             <p className="text-slate-400 text-sm">Abrí la caja para empezar a vender</p>
           </CardContent>
@@ -155,6 +167,16 @@ export default function CajaPage() {
             </span>
           </div>
 
+          {blind ? (
+            <Card>
+              <CardContent className="py-10 text-center">
+                <LockOpen className="w-10 h-10 mx-auto text-emerald-500 mb-3" />
+                <p className="text-slate-600 font-medium">Caja abierta — ya podés vender</p>
+                <p className="text-slate-400 text-sm">Al final del turno contá el efectivo y apretá “Cerrar caja”.</p>
+              </CardContent>
+            </Card>
+          ) : (
+          <>
           {/* Resumen numérico */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <Card>
@@ -276,6 +298,8 @@ export default function CajaPage() {
               )}
             </CardContent>
           </Card>
+          </>
+          )}
         </>
       )}
 
@@ -300,6 +324,9 @@ export default function CajaPage() {
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>Cerrar caja</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
+            {blind ? (
+              <p className="text-sm text-slate-500">Contá todo el efectivo que hay en la caja (incluido el cambio inicial) y escribí el total.</p>
+            ) : (
             <div className="bg-slate-50 rounded-lg p-3 text-sm space-y-1">
               <div className="flex justify-between"><span>Ventas del día:</span><span className="font-bold">{fmt(totalVentas)}</span></div>
               <div className="flex justify-between"><span>Monto inicial:</span><span>{fmt(register?.opening_amount || 0)}</span></div>
@@ -308,6 +335,7 @@ export default function CajaPage() {
                 <span className="text-emerald-600">{fmt(esperadoEnCaja)}</span>
               </div>
             </div>
+            )}
             <div>
               <Label>Monto físico contado</Label>
               <Input type="number" placeholder="0.00" value={closeAmount}
@@ -316,7 +344,7 @@ export default function CajaPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCloseDialog(false)}>Cancelar</Button>
-            <Button onClick={handleClose} className="bg-red-600 hover:bg-red-700">Cerrar caja</Button>
+            <Button onClick={handleClose} disabled={closeAmount === ''} className="bg-red-600 hover:bg-red-700">Cerrar caja</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

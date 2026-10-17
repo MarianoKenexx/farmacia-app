@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { homeFor, isCajeroBlocked } from '@/lib/roles'
 
 // Mapeo ruta → clave de permiso
 const ROUTE_PERMISSIONS: Record<string, string> = {
@@ -47,52 +48,60 @@ export async function proxy(request: NextRequest) {
   const isLoginPage = pathname === '/login'
   const isAdminPage = pathname.startsWith('/admin')
   const isApiRoute = pathname.startsWith('/api')
-  const isDashboard = pathname === '/dashboard' || pathname === '/'
+  const isRoot = pathname === '/'
+  const isSinAcceso = pathname === '/sin-acceso'
 
   // Sin sesión → login
   if (!user && !isLoginPage) {
     return redirectTo(request, '/login')
   }
 
-  // Con sesión en login → dashboard
-  if (user && isLoginPage) {
-    return redirectTo(request, '/dashboard')
-  }
-
   // Las API routes las maneja el servidor internamente
   if (isApiRoute) return supabaseResponse
 
-  if (user && !isLoginPage && !isDashboard) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role, permissions, active')
-      .eq('id', user.id)
-      .single()
+  if (!user) return supabaseResponse
 
-    // Usuario inactivo → logout
-    if (!profile || profile.active === false) {
-      return redirectTo(request, '/login')
-    }
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role, permissions, active')
+    .eq('id', user.id)
+    .single()
 
-    // Panel admin: solo superadmin
-    if (isAdminPage && profile.role !== 'superadmin') {
-      return redirectTo(request, '/dashboard')
-    }
+  // Usuario inactivo o sin perfil → login
+  if (!profile || profile.active === false) {
+    return isLoginPage ? supabaseResponse : redirectTo(request, '/login')
+  }
 
-    // Verificar permisos por sección (superadmin siempre pasa)
-    if (profile.role !== 'superadmin') {
-      const matchedRoute = Object.keys(ROUTE_PERMISSIONS).find(
-        route => pathname === route || pathname.startsWith(route + '/')
-      )
+  const perms = profile.permissions as Record<string, boolean> | null
+  const home = homeFor(profile.role, perms)
 
-      if (matchedRoute) {
-        const permKey = ROUTE_PERMISSIONS[matchedRoute]
-        const perms = profile.permissions as Record<string, boolean> | null
+  // Con sesión en login o en la raíz → su pantalla de inicio
+  if (isLoginPage || isRoot) {
+    return redirectTo(request, home)
+  }
 
-        // Si no tiene la sección habilitada → dashboard
-        if (!perms || perms[permKey] === false) {
-          return redirectTo(request, '/dashboard')
-        }
+  if (isSinAcceso) return supabaseResponse
+
+  // Panel admin: solo superadmin
+  if (isAdminPage && profile.role !== 'superadmin') {
+    return redirectTo(request, home)
+  }
+
+  // Cajeros: nunca dashboard, historial ni reportes
+  if (profile.role === 'cajero' && isCajeroBlocked(pathname)) {
+    return redirectTo(request, home)
+  }
+
+  // Verificar permisos por sección (superadmin siempre pasa)
+  if (profile.role !== 'superadmin') {
+    const matchedRoute = Object.keys(ROUTE_PERMISSIONS).find(
+      route => pathname === route || pathname.startsWith(route + '/')
+    )
+
+    if (matchedRoute) {
+      const permKey = ROUTE_PERMISSIONS[matchedRoute]
+      if (!perms || perms[permKey] === false) {
+        return redirectTo(request, home === pathname ? '/sin-acceso' : home)
       }
     }
   }

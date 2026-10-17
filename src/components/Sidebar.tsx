@@ -13,8 +13,10 @@ import {
   ChevronRight,
   History,
   BarChart2,
+  Printer,
 } from 'lucide-react'
 import { useAuth, type SectionKey } from '@/context/AuthContext'
+import { isCajeroBlocked } from '@/lib/roles'
 
 const allNavItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, permKey: null },
@@ -25,6 +27,7 @@ const allNavItems = [
   { href: '/caja', label: 'Caja', icon: Landmark, permKey: 'caja' as SectionKey },
   { href: '/historial', label: 'Historial', icon: History, permKey: 'historial' as SectionKey },
   { href: '/reportes', label: 'Reportes', icon: BarChart2, permKey: 'reportes' as SectionKey },
+  { href: '/configuracion', label: 'Impresora', icon: Printer, permKey: null },
 ]
 
 const roleLabel: Record<string, string> = {
@@ -46,9 +49,11 @@ export function Sidebar() {
   }
 
   // Filtrar nav según permisos (superadmin ve todo)
-  const navItems = allNavItems.filter(({ permKey }) => {
-    if (!permKey) return true // dashboard siempre visible
+  const navItems = allNavItems.filter(({ href, permKey }) => {
     if (!profile) return false
+    // Cajeros nunca ven dashboard, historial ni reportes
+    if (profile.role === 'cajero' && isCajeroBlocked(href)) return false
+    if (!permKey) return true
     if (profile.role === 'superadmin') return true
     const perms = profile.permissions
     if (!perms) return true
