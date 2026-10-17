@@ -12,6 +12,10 @@ import {
   DollarSign,
   ReceiptText,
 } from 'lucide-react'
+import { METODO_LABEL } from '@/lib/ticket'
+import { useAlerts } from '@/context/AlertsContext'
+import Link from 'next/link'
+import { Bell } from 'lucide-react'
 
 interface DashboardStats {
   ventasHoy: number
@@ -33,6 +37,7 @@ export default function DashboardPage() {
   })
   const [ventasRecientes, setVentasRecientes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const { unread } = useAlerts()
 
   useEffect(() => {
     fetchStats()
@@ -50,10 +55,11 @@ export default function DashboardPage() {
         .eq('status', 'completed'),
       supabase.from('products').select('id', { count: 'exact' }).eq('active', true),
       supabase.from('cash_registers').select('*').eq('status', 'open').limit(1),
-      supabase.from('products').select('id', { count: 'exact' }).filter('stock', 'lte', 'min_stock').eq('active', true),
+      supabase.from('products').select('stock, min_stock').eq('active', true),
       supabase
         .from('sales')
         .select('*, customers(name)')
+        .eq('status', 'completed')
         .order('created_at', { ascending: false })
         .limit(5),
     ])
@@ -67,7 +73,7 @@ export default function DashboardPage() {
       totalHoy,
       netoHoy,
       productosActivos: productsRes.count || 0,
-      stockBajo: lowStockRes.count || 0,
+      stockBajo: (lowStockRes.data || []).filter(p => Number(p.stock) <= Number(p.min_stock)).length,
       cajaAbierta: (registerRes.data?.length || 0) > 0,
     })
     setVentasRecientes(recentRes.data || [])
@@ -93,6 +99,14 @@ export default function DashboardPage() {
           {new Date().toLocaleDateString('es-AR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
         </p>
       </div>
+
+      {unread > 0 && (
+        <Link href="/alertas" className="flex items-center gap-3 bg-red-500/10 border border-red-500/30 text-red-300 rounded-xl px-4 py-3 text-sm hover:bg-red-500/15">
+          <Bell className="w-4 h-4" />
+          Tenés {unread} alerta{unread !== 1 ? 's' : ''} sin ver
+          <span className="ml-auto font-semibold underline underline-offset-2">Ver</span>
+        </Link>
+      )}
 
       {/* Métricas */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -179,9 +193,9 @@ export default function DashboardPage() {
               {ventasRecientes.map((v) => (
                 <div key={v.id} className="flex items-center justify-between py-2 border-b last:border-0">
                   <div>
-                    <p className="text-sm font-medium">Factura #{v.invoice_number}</p>
+                    <p className="text-sm font-medium">Ticket #{v.invoice_number}</p>
                     <p className="text-xs text-slate-500">
-                      {v.customers?.name || 'Cliente ocasional'} · {v.payment_method}
+                      {v.customers?.name || 'Cliente ocasional'} · {METODO_LABEL[v.payment_method] ?? v.payment_method}
                     </p>
                   </div>
                   <div className="text-right">

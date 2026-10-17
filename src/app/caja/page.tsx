@@ -21,6 +21,8 @@ export default function CajaPage() {
   const [closeDialog, setCloseDialog] = useState(false)
   const [loading, setLoading] = useState(true)
   const [closedMsg, setClosedMsg] = useState('')
+  const [actionError, setActionError] = useState('')
+  const [openedByName, setOpenedByName] = useState<string | null>(null)
   const { profile } = useAuth()
   // Cierre "a ciegas": el cajero no ve cuánto debería haber, solo cuenta y carga el monto.
   const blind = profile?.role === 'cajero'
@@ -38,6 +40,11 @@ export default function CajaPage() {
       .single()
 
     setRegister(reg || null)
+    setOpenedByName(null)
+    if (reg?.opened_by) {
+      const { data: p } = await supabase.from('profiles').select('name').eq('id', reg.opened_by).maybeSingle()
+      setOpenedByName(p?.name ?? null)
+    }
 
     if (reg) {
       const { data: s } = await supabase
@@ -51,10 +58,9 @@ export default function CajaPage() {
   }
 
   async function handleOpen() {
-    await supabase.from('cash_registers').insert({
-      opening_amount: Number(openAmount),
-      status: 'open',
-    })
+    setActionError('')
+    const { error } = await supabase.rpc('open_register', { p_amount: Number(openAmount || 0) })
+    if (error) { setActionError(error.message); return }
     setOpenDialog(false)
     setClosedMsg('')
     setOpenAmount('')
@@ -63,11 +69,9 @@ export default function CajaPage() {
 
   async function handleClose() {
     if (!register) return
-    await supabase.from('cash_registers').update({
-      closing_amount: Number(closeAmount),
-      closed_at: new Date().toISOString(),
-      status: 'closed',
-    }).eq('id', register.id)
+    setActionError('')
+    const { error } = await supabase.rpc('close_register', { p_amount: Number(closeAmount) })
+    if (error) { setActionError(error.message); return }
     setCloseDialog(false)
     setClosedMsg(`Caja cerrada. Monto contado registrado: ${fmt(Number(closeAmount))}`)
     setCloseAmount('')
@@ -117,11 +121,11 @@ export default function CajaPage() {
             </Button>
           )}
           {!register ? (
-            <Button onClick={() => setOpenDialog(true)} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
+            <Button onClick={() => { setActionError(''); setOpenDialog(true) }} className="bg-emerald-600 hover:bg-emerald-700 gap-2">
               <LockOpen className="w-4 h-4" /> Abrir caja
             </Button>
           ) : (
-            <Button onClick={() => setCloseDialog(true)} variant="outline" className="gap-2 border-red-300 text-red-600 hover:bg-red-50">
+            <Button onClick={() => { setActionError(''); setCloseDialog(true) }} variant="outline" className="gap-2 border-red-300 text-red-600 hover:bg-red-50">
               <Lock className="w-4 h-4" /> Cerrar caja
             </Button>
           )}
@@ -164,6 +168,7 @@ export default function CajaPage() {
             <span className="text-sm text-slate-500">
               Desde {new Date(register.opened_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
               {' '}· Monto inicial: {fmt(register.opening_amount)}
+              {openedByName && <> · Abrió: {openedByName}</>}
             </span>
           </div>
 
@@ -312,6 +317,7 @@ export default function CajaPage() {
             <Input type="number" placeholder="0.00" value={openAmount}
               onChange={e => setOpenAmount(e.target.value)} />
           </div>
+          {actionError && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{actionError}</p>}
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpenDialog(false)}>Cancelar</Button>
             <Button onClick={handleOpen} className="bg-emerald-600 hover:bg-emerald-700">Abrir</Button>
@@ -342,6 +348,7 @@ export default function CajaPage() {
                 onChange={e => setCloseAmount(e.target.value)} />
             </div>
           </div>
+          {actionError && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{actionError}</p>}
           <DialogFooter>
             <Button variant="outline" onClick={() => setCloseDialog(false)}>Cancelar</Button>
             <Button onClick={handleClose} disabled={closeAmount === ''} className="bg-red-600 hover:bg-red-700">Cerrar caja</Button>

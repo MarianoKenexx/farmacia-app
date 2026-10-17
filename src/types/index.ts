@@ -39,6 +39,8 @@ export interface CashRegister {
   opened_at: string
   closed_at?: string
   status: 'open' | 'closed'
+  opened_by?: string | null
+  closed_by?: string | null
 }
 
 export interface Sale {
@@ -50,8 +52,12 @@ export interface Sale {
   tax: number
   total: number
   payment_method: string
-  status: string
+  status: string // 'completed' | 'voided'
   created_at: string
+  user_id?: string | null
+  voided_at?: string | null
+  voided_by?: string | null
+  void_reason?: string | null
   customers?: Customer
   sale_items?: SaleItem[]
 }
@@ -80,4 +86,17 @@ export interface StockMovement {
   reason?: string
   created_at: string
   products?: Product
+}
+
+export interface Alert {
+  id: string
+  type: 'faltante' | 'sobrante' | 'sin_stock' | 'stock_bajo' | 'venta_anulada' | string
+  severity: 'alta' | 'media' | 'info' | string
+  title: string
+  body: string | null
+  register_id: string | null
+  product_id: string | null
+  sale_id: string | null
+  created_at: string
+  read_at: string | null
 }

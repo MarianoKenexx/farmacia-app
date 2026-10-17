@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { inicioPeriodo, PERIODO_LABEL, type Periodo } from '@/lib/roles'
 import { METODO_LABEL } from '@/lib/ticket'
-import { ChevronDown, ChevronRight, History, Trash2, AlertTriangle } from 'lucide-react'
+import { ChevronDown, ChevronRight, History, Trash2, AlertTriangle, Ban } from 'lucide-react'
 
 interface Register {
   id: string
@@ -13,6 +13,8 @@ interface Register {
   opened_at: string
   closed_at: string | null
   status: string
+  opened_by: string | null
+  closed_by: string | null
 }
 
 interface Sale {
@@ -24,6 +26,10 @@ interface Sale {
   payment_method: string
   invoice_number: string
   created_at: string
+  status: string
+  user_id: string | null
+  voided_by: string | null
+  void_reason: string | null
 }
 
 const PERIODOS: Periodo[] = ['hoy', 'semana', 'mes', 'todo']
@@ -31,13 +37,19 @@ const PERIODOS: Periodo[] = ['hoy', 'semana', 'mes', 'todo']
 const fmt = (n: number) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(n)
 
-const sumTotal = (sales: Sale[]) => sales.reduce((s, v) => s + Number(v.total), 0)
+const ok = (sales: Sale[]) => sales.filter(s => s.status === 'completed')
+const sumTotal = (sales: Sale[]) => ok(sales).reduce((s, v) => s + Number(v.total), 0)
 const sumEfectivo = (sales: Sale[]) =>
-  sales.filter(s => s.payment_method === 'efectivo').reduce((s, v) => s + Number(v.total), 0)
+  ok(sales).filter(s => s.payment_method === 'efectivo').reduce((s, v) => s + Number(v.total), 0)
 
 export default function HistorialPage() {
   const { profile } = useAuth()
   const canDelete = profile?.role === 'superadmin'
+  const canVoid = profile?.role === 'superadmin' || profile?.role === 'admin'
+  const [names, setNames] = useState<Record<string, string>>({})
+  const [toVoid, setToVoid] = useState<Sale | null>(null)
+  const [voidReason, setVoidReason] = useState('')
+  const [voidError, setVoidError] = useState('')
 
   const [periodo, setPeriodo] = useState<Periodo>('semana')
   const [registers, setRegisters] = useState<Register[]>([])
@@ -61,9 +73,8 @@ export default function HistorialPage() {
     if (list.length > 0) {
       const { data: sales } = await supabase
         .from('sales')
-        .select('id, register_id, total, subtotal, tax, payment_method, invoice_number, created_at')
+        .select('id, register_id, total, subtotal, tax, payment_method, invoice_number, created_at, status, user_id, voided_by, void_reason')
         .in('register_id', list.map(r => r.id))
-        .eq('status', 'completed')
         .order('created_at')
       for (const s of (sales ?? []) as Sale[]) {
         if (!s.register_id) continue
@@ -71,6 +82,8 @@ export default function HistorialPage() {
       }
     }
     setSalesByReg(map)
+    const { data: profs } = await supabase.from('profiles').select('id, name')
+    setNames(Object.fromEntries((profs ?? []).map(p => [p.id, p.name])))
     setLoading(false)
   }, [periodo])
 
@@ -78,7 +91,7 @@ export default function HistorialPage() {
 
   // Resumen del período
   const resumen = useMemo(() => {
-    const all = Object.values(salesByReg).flat()
+    const all = ok(Object.values(salesByReg).flat())
     const porMetodo: Record<string, number> = {}
     for (const s of all) porMetodo[s.payment_method] = (porMetodo[s.payment_method] || 0) + Number(s.total)
     let diferencia = 0
@@ -86,7 +99,8 @@ export default function HistorialPage() {
       if (r.closing_amount === null) continue
       diferencia += r.closing_amount - (r.opening_amount + sumEfectivo(salesByReg[r.id] ?? []))
     }
-    return { total: sumTotal(all), ventas: all.length, cajas: registers.length, porMetodo, diferencia }
+    const anuladas = Object.values(salesByReg).flat().filter(s => s.status === 'voided').length
+    return { total: sumTotal(all), ventas: all.length, cajas: registers.length, porMetodo, diferencia, anuladas }
   }, [registers, salesByReg])
 
   async function confirmDelete() {
@@ -107,6 +121,19 @@ export default function HistorialPage() {
       load()
     }
     setTimeout(() => setMsg(''), 4000)
+  }
+
+  async function confirmVoid() {
+    if (!toVoid) return
+    if (!voidReason.trim()) { setVoidError('Escribí el motivo'); return }
+    setDeleting(true)
+    const { error } = await supabase.rpc('void_sale', { p_sale_id: toVoid.id, p_reason: voidReason.trim() })
+    setDeleting(false)
+    if (error) { setVoidError(error.message); return }
+    setToVoid(null)
+    setMsg(`Venta #${toVoid.invoice_number} anulada. El stock se devolvió.`)
+    setTimeout(() => setMsg(''), 4000)
+    load()
   }
 
   return (
@@ -150,6 +177,7 @@ export default function HistorialPage() {
           <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4">
             <p className="text-xs text-slate-500 mb-1">Ventas</p>
             <p className="text-lg font-bold text-white">{resumen.ventas}</p>
+            {resumen.anuladas > 0 && <p className="text-xs text-red-400">{resumen.anuladas} anuladas</p>}
           </div>
           <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4">
             <p className="text-xs text-slate-500 mb-1">Cajas</p>
@@ -221,12 +249,14 @@ export default function HistorialPage() {
                       <p className="text-xs text-slate-500">
                         {fecha.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
                         {reg.closed_at && ` → ${new Date(reg.closed_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`}
+                        {reg.opened_by && ` · Abrió ${names[reg.opened_by] ?? '?'}`}
+                        {reg.closed_by && ` · Cerró ${names[reg.closed_by] ?? '?'}`}
                       </p>
                     </div>
 
                     <div className="text-right shrink-0">
                       <p className="font-bold text-emerald-400">{fmt(total)}</p>
-                      <p className="text-xs text-slate-500">{sales.length} ventas</p>
+                      <p className="text-xs text-slate-500">{ok(sales).length} ventas</p>
                     </div>
 
                     <div className="text-right shrink-0 w-32 hidden sm:block">
@@ -286,7 +316,7 @@ export default function HistorialPage() {
                       <>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
                           {Object.entries(
-                            sales.reduce((acc, s) => {
+                            ok(sales).reduce((acc, s) => {
                               acc[s.payment_method] = (acc[s.payment_method] || 0) + Number(s.total)
                               return acc
                             }, {} as Record<string, number>)
@@ -303,26 +333,53 @@ export default function HistorialPage() {
                             <tr className="border-b border-slate-700">
                               <th className="text-left pb-2 text-xs text-slate-500 font-medium">Ticket</th>
                               <th className="text-left pb-2 text-xs text-slate-500 font-medium">Hora</th>
+                              <th className="text-left pb-2 text-xs text-slate-500 font-medium">Vendió</th>
                               <th className="text-left pb-2 text-xs text-slate-500 font-medium">Pago</th>
                               <th className="text-right pb-2 text-xs text-slate-500 font-medium">Total</th>
+                              {canVoid && <th className="w-10" />}
                             </tr>
                           </thead>
                           <tbody>
-                            {sales.map(s => (
-                              <tr key={s.id} className="border-b border-slate-700/50 last:border-0">
-                                <td className="py-2 text-slate-300">#{s.invoice_number}</td>
+                            {sales.map(s => {
+                              const voided = s.status === 'voided'
+                              return (
+                              <tr key={s.id} className={`border-b border-slate-700/50 last:border-0 ${voided ? 'opacity-60' : ''}`}>
+                                <td className="py-2 text-slate-300">
+                                  #{s.invoice_number}
+                                  {voided && (
+                                    <span className="block text-[11px] text-red-400">
+                                      ANULADA{s.voided_by ? ` por ${names[s.voided_by] ?? '?'}` : ''}{s.void_reason ? `: ${s.void_reason}` : ''}
+                                    </span>
+                                  )}
+                                </td>
                                 <td className="py-2 text-slate-400">
                                   {new Date(s.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
                                 </td>
+                                <td className="py-2 text-slate-400">{s.user_id ? (names[s.user_id] ?? '?') : '—'}</td>
                                 <td className="py-2 text-slate-400">{METODO_LABEL[s.payment_method] ?? s.payment_method}</td>
-                                <td className="py-2 text-right font-semibold text-emerald-400">{fmt(Number(s.total))}</td>
+                                <td className={`py-2 text-right font-semibold ${voided ? 'text-slate-500 line-through' : 'text-emerald-400'}`}>{fmt(Number(s.total))}</td>
+                                {canVoid && (
+                                  <td className="py-2 text-right">
+                                    {!voided && (
+                                      <button
+                                        onClick={() => { setToVoid(s); setVoidReason(''); setVoidError('') }}
+                                        title="Anular venta"
+                                        className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg"
+                                      >
+                                        <Ban className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </td>
+                                )}
                               </tr>
-                            ))}
+                              )
+                            })}
                           </tbody>
                           <tfoot>
                             <tr className="border-t border-slate-600">
-                              <td colSpan={3} className="pt-3 text-slate-400 font-medium text-xs">TOTAL</td>
+                              <td colSpan={4} className="pt-3 text-slate-400 font-medium text-xs">TOTAL (sin anuladas)</td>
                               <td className="pt-3 text-right font-bold text-emerald-400">{fmt(total)}</td>
+                              {canVoid && <td />}
                             </tr>
                           </tfoot>
                         </table>
@@ -333,6 +390,33 @@ export default function HistorialPage() {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Anular venta */}
+      {toVoid && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-sm w-full">
+            <h2 className="text-white font-semibold mb-1">Anular venta #{toVoid.invoice_number}</h2>
+            <p className="text-sm text-slate-400 mb-4">
+              {fmt(Number(toVoid.total))} · {METODO_LABEL[toVoid.payment_method] ?? toVoid.payment_method}.
+              La venta queda registrada como anulada, se devuelve el stock y queda anotado quién la anuló.
+            </p>
+            <input
+              autoFocus
+              value={voidReason}
+              onChange={e => setVoidReason(e.target.value)}
+              placeholder="Motivo (ej: el cliente devolvió el producto)"
+              className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-red-500 mb-2"
+            />
+            {voidError && <p className="text-sm text-red-400 mb-2">{voidError}</p>}
+            <div className="flex justify-end gap-2 mt-3">
+              <button onClick={() => setToVoid(null)} disabled={deleting} className="px-4 py-2 text-sm text-slate-300 hover:text-white rounded-xl">Cancelar</button>
+              <button onClick={confirmVoid} disabled={deleting} className="px-4 py-2 text-sm font-semibold bg-red-600 hover:bg-red-500 text-white rounded-xl disabled:opacity-50">
+                {deleting ? 'Anulando...' : 'Anular venta'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -350,7 +434,7 @@ export default function HistorialPage() {
               Caja del {new Date(toDelete.opened_at).toLocaleString('es-AR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
             </p>
             <p className="text-sm text-slate-400 mb-5">
-              Se borran la caja y sus <b className="text-white">{(salesByReg[toDelete.id] ?? []).length} ventas</b>. No se puede deshacer.
+              Se borran la caja y sus <b className="text-white">{(salesByReg[toDelete.id] ?? []).length} ventas</b> sin dejar rastro. No se puede deshacer. Si es una venta mal hecha, mejor anulala.
             </p>
             <div className="flex justify-end gap-2">
               <button

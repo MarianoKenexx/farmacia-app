@@ -14,7 +14,9 @@ import {
   History,
   BarChart2,
   Printer,
+  Bell,
 } from 'lucide-react'
+import { useAlerts } from '@/context/AlertsContext'
 import { useAuth, type SectionKey } from '@/context/AuthContext'
 import { isCajeroBlocked } from '@/lib/roles'
 
@@ -27,6 +29,7 @@ const allNavItems = [
   { href: '/caja', label: 'Caja', icon: Landmark, permKey: 'caja' as SectionKey },
   { href: '/historial', label: 'Historial', icon: History, permKey: 'historial' as SectionKey },
   { href: '/reportes', label: 'Reportes', icon: BarChart2, permKey: 'reportes' as SectionKey },
+  { href: '/alertas', label: 'Alertas', icon: Bell, permKey: null },
   { href: '/configuracion', label: 'Impresora', icon: Printer, permKey: null },
 ]
 
@@ -40,6 +43,7 @@ export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const { profile, signOut } = useAuth()
+  const { unread } = useAlerts()
 
   if (pathname === '/login') return null
 
@@ -95,7 +99,12 @@ export function Sidebar() {
                 }`}
               />
               {label}
-              {active && (
+              {href === '/alertas' && unread > 0 && (
+                <span className="ml-auto min-w-5 h-5 px-1.5 rounded-full bg-red-500 text-white text-[11px] font-bold flex items-center justify-center">
+                  {unread > 99 ? '99+' : unread}
+                </span>
+              )}
+              {active && href !== '/alertas' && (
                 <ChevronRight className="w-3 h-3 ml-auto text-emerald-400/50" />
               )}
             </Link>

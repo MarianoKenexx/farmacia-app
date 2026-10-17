@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
 import { AuthProvider } from "@/context/AuthContext";
+import { AlertsProvider } from "@/context/AlertsContext";
+import { AlertToast } from "@/components/AlertToast";
 
 export const metadata: Metadata = {
   title: "Farmacia - Sistema de Gestión",
@@ -30,12 +32,15 @@ export default function RootLayout({
       </head>
       <body className="bg-slate-950 text-white font-sans">
         <AuthProvider>
-          <div className="flex h-screen overflow-hidden">
-            <Sidebar />
-            <main className="flex-1 overflow-auto bg-slate-950">
-              {children}
-            </main>
-          </div>
+          <AlertsProvider>
+            <div className="flex h-screen overflow-hidden">
+              <Sidebar />
+              <main className="flex-1 overflow-auto bg-slate-950">
+                {children}
+              </main>
+            </div>
+            <AlertToast />
+          </AlertsProvider>
         </AuthProvider>
         <script
           dangerouslySetInnerHTML={{

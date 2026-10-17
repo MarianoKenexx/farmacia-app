@@ -188,58 +188,39 @@ export default function POSPage() {
       return
     }
 
-    const salePayload = {
-      subtotal: subtotal - iva,
-      tax: iva,
-      total,
-      payment_method: payMethod,
-      register_id: regId,
-      status: 'completed',
-    }
+    // La venta se registra en la base "todo junto": venta, líneas, stock y movimientos.
+    // Los precios los toma la base, no esta pantalla.
+    const { data: result, error } = await supabase.rpc('create_sale', {
+      p_items: cart.map(i => ({ product_id: i.product.id, quantity: i.quantity, is_fraccion: i.is_fraccion })),
+      p_payment_method: payMethod,
+    })
 
-    const { data: sale, error } = await supabase.from('sales').insert(salePayload).select().single()
-
-    if (error || !sale) {
-      setSaleError('No se pudo registrar la venta. Revisá la conexión e intentá de nuevo.')
+    if (error || !result) {
+      setSaleError(error?.message || 'No se pudo registrar la venta. Revisá la conexión e intentá de nuevo.')
       setProcessing(false)
+      if (error?.message?.includes('caja')) fetchRegister()
       return
     }
 
-    const items = cart.map(i => ({
-      sale_id: sale.id,
-      product_id: i.product.id,
-      quantity: i.quantity,
-      unit_price: i.unit_price,
-      subtotal: i.subtotal,
-    }))
-    await supabase.from('sale_items').insert(items)
-
-    for (const item of cart) {
-      await supabase.from('products')
-        .update({ stock: parseFloat((item.product.stock - item.quantity).toFixed(4)) })
-        .eq('id', item.product.id)
-
-      await supabase.from('stock_movements').insert({
-        product_id: item.product.id,
-        type: 'salida',
-        quantity: item.quantity,
-        reason: `Venta #${sale.invoice_number}`,
-      })
+    const sale = result as {
+      id: string; invoice_number: number; created_at: string
+      total: number; tax: number; neto: number
+      lines: { product_id: string; unit_price: number; subtotal: number }[]
     }
 
     // Ticket
     const ticket: TicketData = {
       invoiceNumber: sale.invoice_number,
       date: new Date(sale.created_at ?? Date.now()),
-      items: cart.map(i => ({
+      items: cart.map((i, idx) => ({
         name: i.product.name,
         qtyLabel: fmtQty(i.quantity, i.is_fraccion, i.product),
-        unitPrice: i.unit_price,
-        subtotal: i.subtotal,
+        unitPrice: Number(sale.lines[idx]?.unit_price ?? i.unit_price),
+        subtotal: Number(sale.lines[idx]?.subtotal ?? i.subtotal),
       })),
-      neto: subtotal - iva,
-      iva,
-      total,
+      neto: Number(sale.neto),
+      iva: Number(sale.tax),
+      total: Number(sale.total),
       paymentMethod: payMethod,
       cashier: profile?.name,
     }
