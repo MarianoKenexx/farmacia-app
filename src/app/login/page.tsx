@@ -1,5 +1,6 @@
 'use client'
 import { useState } from 'react'
+import { BrandMark } from '@/components/BrandMark'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
@@ -30,12 +31,8 @@ export default function LoginPage() {
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="w-20 h-20 bg-emerald-500 rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/20">
-            <span className="text-3xl">💊</span>
-          </div>
-          <h1 className="text-3xl font-bold text-white">Farmacia</h1>
-          <p className="text-slate-400 mt-1 text-sm">Sistema de Gestión</p>
+        <div className="flex justify-center mb-8">
+          <BrandMark size="lg" />
         </div>
 
         {/* Card */}

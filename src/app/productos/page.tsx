@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
+import { fmtStock, fmtUnidades } from '@/lib/format'
 import { supabase } from '@/lib/supabase'
 import { Product, Category } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -172,8 +173,8 @@ export default function ProductosPage() {
 
   const stockLabel = (p: Product) => {
     const u = p.unidades_por_envase ?? 1
-    if (u <= 1) return `${p.stock} u`
-    return `${p.stock} cajas / ${p.stock * u} ${p.nombre_fraccion ?? 'unidad'}s`
+    if (u <= 1) return `${fmtStock(p.stock)} u`
+    return `${fmtStock(p.stock)} cajas / ${fmtUnidades(p.stock, u)} ${p.nombre_fraccion ?? 'unidad'}s`
   }
 
   const uPorE = parseInt(form.unidades_por_envase) || 1

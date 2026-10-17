@@ -4,6 +4,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { AuthProvider } from "@/context/AuthContext";
 import { AlertsProvider } from "@/context/AlertsContext";
 import { AlertToast } from "@/components/AlertToast";
+import { BrandingProvider } from "@/context/BrandingContext";
 
 export const metadata: Metadata = {
   title: "Farmacia - Sistema de Gestión",
@@ -31,6 +32,7 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icon-192.png" />
       </head>
       <body className="bg-slate-950 text-white font-sans">
+        <BrandingProvider>
         <AuthProvider>
           <AlertsProvider>
             <div className="flex h-screen overflow-hidden">
@@ -42,6 +44,7 @@ export default function RootLayout({
             <AlertToast />
           </AlertsProvider>
         </AuthProvider>
+        </BrandingProvider>
         <script
           dangerouslySetInnerHTML={{
             __html: `

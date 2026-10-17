@@ -13,10 +13,11 @@ import {
   ChevronRight,
   History,
   BarChart2,
-  Printer,
+  SlidersHorizontal,
   Bell,
 } from 'lucide-react'
 import { useAlerts } from '@/context/AlertsContext'
+import { BrandMark } from '@/components/BrandMark'
 import { useAuth, type SectionKey } from '@/context/AuthContext'
 import { isCajeroBlocked } from '@/lib/roles'
 
@@ -30,7 +31,7 @@ const allNavItems = [
   { href: '/historial', label: 'Historial', icon: History, permKey: 'historial' as SectionKey },
   { href: '/reportes', label: 'Reportes', icon: BarChart2, permKey: 'reportes' as SectionKey },
   { href: '/alertas', label: 'Alertas', icon: Bell, permKey: null },
-  { href: '/configuracion', label: 'Impresora', icon: Printer, permKey: null },
+  { href: '/configuracion', label: 'Configuración', icon: SlidersHorizontal, permKey: null },
 ]
 
 const roleLabel: Record<string, string> = {
@@ -68,15 +69,7 @@ export function Sidebar() {
     <aside className="w-64 bg-slate-900 flex flex-col h-full border-r border-slate-800 shrink-0">
       {/* Header */}
       <div className="p-5 border-b border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center shrink-0">
-            <span className="text-lg">💊</span>
-          </div>
-          <div>
-            <h1 className="font-bold text-white text-sm leading-tight">Farmacia</h1>
-            <p className="text-slate-400 text-xs">Sistema de Gestión</p>
-          </div>
-        </div>
+        <BrandMark />
       </div>
 
       {/* Nav */}

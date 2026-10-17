@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { fmtStock } from '@/lib/format'
 import { supabase } from '@/lib/supabase'
 import { Product } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -139,10 +140,10 @@ export default function StockPage() {
                       </td>
                       <td className="px-4 py-3 text-center">
                         <span className={`font-bold text-base ${p.stock <= p.min_stock ? 'text-red-500' : 'text-slate-700'}`}>
-                          {p.stock}
+                          {fmtStock(p.stock)}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-center text-slate-500">{p.min_stock}</td>
+                      <td className="px-4 py-3 text-center text-slate-500">{fmtStock(p.min_stock)}</td>
                       <td className="px-4 py-3">
                         <Badge variant="outline" className={st.class}>{st.label}</Badge>
                       </td>
@@ -178,7 +179,7 @@ export default function StockPage() {
             <div className="space-y-3 py-2">
               <div className="bg-slate-50 rounded-lg p-3">
                 <p className="font-medium text-slate-800">{selected.name}</p>
-                <p className="text-sm text-slate-500">Stock actual: <strong>{selected.stock}</strong></p>
+                <p className="text-sm text-slate-500">Stock actual: <strong>{fmtStock(selected.stock)}</strong></p>
               </div>
               <div>
                 <Label>{movType === 'ajuste' ? 'Nuevo stock total' : 'Cantidad'}</Label>

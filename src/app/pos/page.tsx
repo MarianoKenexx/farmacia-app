@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { fmtStock, fmtUnidades } from '@/lib/format'
 import { supabase } from '@/lib/supabase'
 import { Product, CartItem } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -11,7 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search, Trash2, ShoppingCart, CheckCircle, Plus, Minus, Barcode, Package, Pill, Printer, Lock } from 'lucide-react'
 import Link from 'next/link'
 import { useAuth } from '@/context/AuthContext'
-import { loadTicketConfig, printTicket, type TicketData } from '@/lib/ticket'
+import { loadPrinterConfig, printTicket, type TicketData } from '@/lib/ticket'
+import { useBranding } from '@/context/BrandingContext'
 
 // CartItem extended to track unit price and mode
 interface CartItemExt extends CartItem {
@@ -32,6 +34,7 @@ export default function POSPage() {
   const [saleError, setSaleError] = useState('')
   const [lastTicket, setLastTicket] = useState<TicketData | null>(null)
   const { profile } = useAuth()
+  const { settings: brand } = useBranding()
   const barcodeRef = useRef<HTMLInputElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -225,8 +228,8 @@ export default function POSPage() {
       cashier: profile?.name,
     }
     setLastTicket(ticket)
-    const cfg = loadTicketConfig()
-    if (cfg.autoPrint) printTicket(ticket, cfg)
+    const printer = loadPrinterConfig()
+    if (printer.autoPrint) printTicket(ticket, brand, printer)
 
     setCart([])
     setPayMethod('efectivo')
@@ -245,7 +248,7 @@ export default function POSPage() {
         <h1 className="text-2xl font-bold text-white">Punto de Venta</h1>
         {lastTicket && (
           <button
-            onClick={() => printTicket({ ...lastTicket, reprint: true })}
+            onClick={() => printTicket({ ...lastTicket, reprint: true }, brand)}
             className="flex items-center gap-2 text-sm text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-2 rounded-xl"
           >
             <Printer className="w-4 h-4" /> Reimprimir último ticket
@@ -319,9 +322,9 @@ export default function POSPage() {
                           <p className="text-xs text-slate-400">{p.laboratory || p.barcode || '—'}</p>
                         </div>
                         <div className="text-right ml-3 flex-shrink-0">
-                          <p className="text-xs text-slate-500">Stock: {p.stock} caja{p.stock !== 1 ? 's' : ''}</p>
+                          <p className="text-xs text-slate-500">Stock: {fmtStock(p.stock)} caja{Number(p.stock) !== 1 ? 's' : ''}</p>
                           {canFraccionar && (
-                            <p className="text-xs text-slate-500">{p.stock * uPorE} {nombreFrac}s</p>
+                            <p className="text-xs text-slate-500">{fmtUnidades(p.stock, uPorE)} {nombreFrac}s</p>
                           )}
                         </div>
                       </div>

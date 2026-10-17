@@ -1,45 +1,41 @@
 // Impresión de tickets en impresoras térmicas (58 mm u 80 mm).
 //
-// La impresora se instala en la computadora como cualquier otra impresora
-// (con el driver del fabricante) y la app le manda el ticket a través del
-// navegador. La configuración se guarda en cada computadora, porque cada
-// caja puede tener su propia impresora y su propio local.
+// - Lo que depende de la impresora (ancho, copias, imprimir solo) se guarda en
+//   cada computadora, porque cada caja puede tener una impresora distinta.
+// - Los datos de la empresa (nombre, logo, CUIT...) vienen de la configuración
+//   compartida (app_settings) y son iguales en todas las cajas.
+import type { AppSettings } from '@/context/BrandingContext'
 
-export interface TicketConfig {
+export interface PrinterConfig {
   autoPrint: boolean      // imprimir solo al apretar "Cobrar"
   width: '58' | '80'      // ancho del papel en mm
-  businessName: string
-  address: string
-  cuit: string
-  phone: string
-  footer: string
   copies: number
 }
 
-export const DEFAULT_TICKET_CONFIG: TicketConfig = {
+export const DEFAULT_PRINTER_CONFIG: PrinterConfig = {
   autoPrint: true,
   width: '80',
-  businessName: 'Farmacia',
-  address: '',
-  cuit: '',
-  phone: '',
-  footer: '¡Gracias por su compra!',
   copies: 1,
 }
 
 const STORAGE_KEY = 'farmacia.ticketConfig'
 
-export function loadTicketConfig(): TicketConfig {
+export function loadPrinterConfig(): PrinterConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return { ...DEFAULT_TICKET_CONFIG }
-    return { ...DEFAULT_TICKET_CONFIG, ...JSON.parse(raw) }
+    if (!raw) return { ...DEFAULT_PRINTER_CONFIG }
+    const p = JSON.parse(raw)
+    return {
+      autoPrint: typeof p.autoPrint === 'boolean' ? p.autoPrint : DEFAULT_PRINTER_CONFIG.autoPrint,
+      width: p.width === '58' ? '58' : '80',
+      copies: Number(p.copies) || 1,
+    }
   } catch {
-    return { ...DEFAULT_TICKET_CONFIG }
+    return { ...DEFAULT_PRINTER_CONFIG }
   }
 }
 
-export function saveTicketConfig(cfg: TicketConfig) {
+export function savePrinterConfig(cfg: PrinterConfig) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg))
   } catch {
@@ -80,16 +76,25 @@ const money = (n: number) =>
 const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
-export function buildTicketHtml(data: TicketData, cfg: TicketConfig) {
-  const w = cfg.width === '58' ? 58 : 80
+// Logo que va en el ticket: el propio del ticket, o si no hay, el del menú
+export function ticketLogoUrl(brand: AppSettings) {
+  if (!brand.ticket_show_logo) return null
+  return brand.ticket_logo_url || brand.logo_url || null
+}
+
+export function buildTicketHtml(data: TicketData, printer: PrinterConfig, brand: AppSettings) {
+  const w = printer.width === '58' ? 58 : 80
   const fontSize = w === 58 ? 10 : 12
   const line = '<div class="sep"></div>'
+  const name = brand.ticket_name?.trim() || brand.business_name || 'Farmacia'
+  const logo = ticketLogoUrl(brand)
 
   const header = [
-    `<div class="center big">${esc(cfg.businessName || 'Farmacia')}</div>`,
-    cfg.address && `<div class="center">${esc(cfg.address)}</div>`,
-    cfg.phone && `<div class="center">Tel: ${esc(cfg.phone)}</div>`,
-    cfg.cuit && `<div class="center">CUIT: ${esc(cfg.cuit)}</div>`,
+    logo && `<div class="center"><img class="logo" src="${esc(logo)}" alt=""></div>`,
+    `<div class="center big">${esc(name)}</div>`,
+    brand.ticket_address && `<div class="center">${esc(brand.ticket_address)}</div>`,
+    brand.ticket_phone && `<div class="center">Tel: ${esc(brand.ticket_phone)}</div>`,
+    brand.ticket_cuit && `<div class="center">CUIT: ${esc(brand.ticket_cuit)}</div>`,
   ].filter(Boolean).join('')
 
   const items = data.items.map(i => `
@@ -113,11 +118,11 @@ export function buildTicketHtml(data: TicketData, cfg: TicketConfig) {
       <div class="row big"><span>TOTAL</span><span>${money(data.total)}</span></div>
       <div class="row"><span>Pago</span><span>${esc(METODO_LABEL[data.paymentMethod] ?? data.paymentMethod)}</span></div>
       ${line}
-      ${cfg.footer ? `<div class="center">${esc(cfg.footer)}</div>` : ''}
+      ${brand.ticket_footer ? `<div class="center">${esc(brand.ticket_footer)}</div>` : ''}
       <div class="center small">Comprobante no válido como factura</div>
     </div>`
 
-  const copies = Math.max(1, Math.min(3, cfg.copies || 1))
+  const copies = Math.max(1, Math.min(3, printer.copies || 1))
 
   return `<!doctype html><html><head><meta charset="utf-8"><title>Ticket</title>
   <style>
@@ -128,6 +133,7 @@ export function buildTicketHtml(data: TicketData, cfg: TicketConfig) {
     .ticket { padding: 3mm ${w === 58 ? 2 : 4}mm 6mm; page-break-after: always; }
     .ticket:last-child { page-break-after: auto; }
     .center { text-align: center; }
+    .logo { display: block; margin: 0 auto 2mm; max-width: 70%; max-height: 22mm; object-fit: contain; filter: grayscale(1) contrast(1.2); }
     .big { font-size: ${fontSize + 4}px; font-weight: 700; }
     .bold { font-weight: 700; }
     .small { font-size: ${fontSize - 2}px; margin-top: 2mm; }
@@ -138,32 +144,35 @@ export function buildTicketHtml(data: TicketData, cfg: TicketConfig) {
 }
 
 // Imprime usando un marco oculto, sin abrir otra ventana.
-export function printTicket(data: TicketData, cfg: TicketConfig = loadTicketConfig()) {
+// Espera a que cargue el logo (máximo 3 segundos) para que salga en el papel.
+export function printTicket(data: TicketData, brand: AppSettings, printer: PrinterConfig = loadPrinterConfig()) {
   if (typeof window === 'undefined') return
   const iframe = document.createElement('iframe')
   iframe.setAttribute('aria-hidden', 'true')
-  iframe.style.position = 'fixed'
-  iframe.style.right = '0'
-  iframe.style.bottom = '0'
-  iframe.style.width = '0'
-  iframe.style.height = '0'
-  iframe.style.border = '0'
+  Object.assign(iframe.style, { position: 'fixed', right: '0', bottom: '0', width: '0', height: '0', border: '0' })
   document.body.appendChild(iframe)
 
   const doc = iframe.contentDocument
   if (!doc) { iframe.remove(); return }
   doc.open()
-  doc.write(buildTicketHtml(data, cfg))
+  doc.write(buildTicketHtml(data, printer, brand))
   doc.close()
 
   const win = iframe.contentWindow
-  const cleanup = () => setTimeout(() => iframe.remove(), 1000)
-  setTimeout(() => {
-    try {
-      win?.focus()
-      win?.print()
-    } finally {
-      cleanup()
-    }
-  }, 150)
+  const imgs = Array.from(doc.images)
+  const ready = Promise.race([
+    Promise.all(imgs.map(img => img.complete ? Promise.resolve() : new Promise<void>(r => { img.onload = () => r(); img.onerror = () => r() }))),
+    new Promise<void>(r => setTimeout(r, 3000)),
+  ])
+
+  ready.then(() => {
+    setTimeout(() => {
+      try {
+        win?.focus()
+        win?.print()
+      } finally {
+        setTimeout(() => iframe.remove(), 1000)
+      }
+    }, 100)
+  })
 }
