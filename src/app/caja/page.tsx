@@ -107,14 +107,14 @@ export default function CajaPage() {
       {/* ─── ENCABEZADO PARA PANTALLA ─── */}
       <div className="flex items-center justify-between no-print">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Caja</h1>
-          <p className="text-sm text-slate-500">Control de apertura, cierre y arqueo</p>
+          <h1 className="text-2xl font-bold text-white">Caja</h1>
+          <p className="text-sm text-slate-400">Control de apertura, cierre y arqueo</p>
         </div>
         <div className="flex items-center gap-2">
           {register && !blind && (
             <Button
               variant="outline"
-              className="gap-2"
+              className="gap-2 bg-slate-800 border-slate-700 text-white hover:bg-slate-700 hover:text-white"
               onClick={() => window.print()}
             >
               <Printer className="w-4 h-4" /> Exportar PDF
@@ -125,7 +125,7 @@ export default function CajaPage() {
               <LockOpen className="w-4 h-4" /> Abrir caja
             </Button>
           ) : (
-            <Button onClick={() => { setActionError(''); setCloseDialog(true) }} variant="outline" className="gap-2 border-red-300 text-red-600 hover:bg-red-50">
+            <Button onClick={() => { setActionError(''); setCloseDialog(true) }} variant="outline" className="gap-2 bg-slate-800 border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300">
               <Lock className="w-4 h-4" /> Cerrar caja
             </Button>
           )}
