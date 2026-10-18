@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Search, Trash2, ShoppingCart, CheckCircle, Plus, Minus, Barcode, Package, Pill, Printer, Lock } from 'lucide-react'
+import { Search, Trash2, ShoppingCart, CheckCircle, Plus, Minus, Barcode, Package, Pill, Printer, Lock, Ban, X } from 'lucide-react'
 import Link from 'next/link'
 import { useAuth } from '@/context/AuthContext'
 import { loadPrinterConfig, printTicket, type TicketData } from '@/lib/ticket'
@@ -33,6 +33,14 @@ export default function POSPage() {
   const [registerId, setRegisterId] = useState<string | null | undefined>(undefined) // undefined = cargando
   const [saleError, setSaleError] = useState('')
   const [lastTicket, setLastTicket] = useState<TicketData | null>(null)
+  const [lastSaleId, setLastSaleId] = useState<string | null>(null)
+  const [lastSaleAt, setLastSaleAt] = useState<number | null>(null)
+  const [voidOpen, setVoidOpen] = useState(false)
+  const [voidReason, setVoidReason] = useState('')
+  const [voidPin, setVoidPin] = useState('')
+  const [voidError, setVoidError] = useState('')
+  const [voiding, setVoiding] = useState(false)
+  const [voidedMsg, setVoidedMsg] = useState('')
   const { profile } = useAuth()
   const { settings: brand } = useBranding()
   const barcodeRef = useRef<HTMLInputElement>(null)
@@ -228,6 +236,9 @@ export default function POSPage() {
       cashier: profile?.name,
     }
     setLastTicket(ticket)
+    setLastSaleId(sale.id)
+    setLastSaleAt(Date.now())
+    setVoidedMsg('')
     const printer = loadPrinterConfig()
     if (printer.autoPrint) printTicket(ticket, brand, printer)
 
@@ -242,19 +253,99 @@ export default function POSPage() {
     }, 2000)
   }
 
+  // El cajero solo puede pedir la anulación hasta 15 minutos después de cobrar
+  const VOID_WINDOW_MS = 15 * 60 * 1000
+  const canAskVoid = lastSaleId && lastSaleAt && (Date.now() - lastSaleAt) < VOID_WINDOW_MS
+
+  async function handleVoid() {
+    if (!lastSaleId) return
+    setVoidError('')
+    if (!voidReason.trim()) { setVoidError('Indicá el motivo.'); return }
+    if (!/^[0-9]{4,6}$/.test(voidPin)) { setVoidError('El PIN del supervisor es de 4 a 6 números.'); return }
+    setVoiding(true)
+    const { error } = await supabase.rpc('void_sale_with_pin', {
+      p_sale_id: lastSaleId, p_reason: voidReason.trim(), p_pin: voidPin,
+    })
+    setVoiding(false)
+    if (error) { setVoidError(error.message); return }
+    setVoidOpen(false)
+    setVoidReason('')
+    setVoidPin('')
+    setLastSaleId(null)
+    setLastTicket(null)
+    setVoidedMsg('Venta anulada. El stock se devolvió solo.')
+    fetchProducts()
+    setTimeout(() => setVoidedMsg(''), 4000)
+  }
+
   return (
     <div className="p-6 h-full">
       <div className="flex items-center justify-between mb-4 gap-3">
         <h1 className="text-2xl font-bold text-white">Punto de Venta</h1>
-        {lastTicket && (
-          <button
-            onClick={() => printTicket({ ...lastTicket, reprint: true }, brand)}
-            className="flex items-center gap-2 text-sm text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-2 rounded-xl"
-          >
-            <Printer className="w-4 h-4" /> Reimprimir último ticket
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {voidedMsg && (
+            <span className="text-sm text-emerald-400 flex items-center gap-1.5"><CheckCircle className="w-4 h-4" /> {voidedMsg}</span>
+          )}
+          {lastTicket && (
+            <button
+              onClick={() => printTicket({ ...lastTicket, reprint: true }, brand)}
+              className="flex items-center gap-2 text-sm text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-2 rounded-xl"
+            >
+              <Printer className="w-4 h-4" /> Reimprimir último ticket
+            </button>
+          )}
+          {canAskVoid && (
+            <button
+              onClick={() => { setVoidError(''); setVoidReason(''); setVoidPin(''); setVoidOpen(true) }}
+              className="flex items-center gap-2 text-sm text-red-400 hover:text-red-300 bg-slate-800 hover:bg-red-500/10 border border-red-500/30 px-3 py-2 rounded-xl"
+            >
+              <Ban className="w-4 h-4" /> Anular esta venta
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Anular última venta: pide motivo y el PIN de un supervisor */}
+      {voidOpen && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5 w-full max-w-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-white font-semibold flex items-center gap-2"><Ban className="w-4 h-4 text-red-400" /> Anular última venta</h2>
+              <button onClick={() => setVoidOpen(false)} className="text-slate-400 hover:text-white"><X className="w-4 h-4" /></button>
+            </div>
+            <p className="text-xs text-slate-400">
+              Esto devuelve el stock y queda registrado. Necesitás que un supervisor confirme con su PIN.
+            </p>
+            <div>
+              <p className="text-xs text-slate-400 mb-1.5">Motivo</p>
+              <textarea
+                value={voidReason} onChange={e => setVoidReason(e.target.value)}
+                rows={2} placeholder="Ej: se cobró mal, el cliente se arrepintió..."
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-red-500"
+              />
+            </div>
+            <div>
+              <p className="text-xs text-slate-400 mb-1.5">PIN del supervisor</p>
+              <input
+                type="password" inputMode="numeric" maxLength={6}
+                value={voidPin} onChange={e => setVoidPin(e.target.value.replace(/\D/g, ''))}
+                placeholder="••••"
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-red-500"
+              />
+            </div>
+            {voidError && <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-2">{voidError}</p>}
+            <div className="flex justify-end gap-2 pt-1">
+              <button onClick={() => setVoidOpen(false)} className="text-sm text-slate-300 hover:text-white px-3 py-2">Cancelar</button>
+              <button
+                onClick={handleVoid} disabled={voiding}
+                className="bg-red-600 hover:bg-red-500 text-white text-sm font-semibold px-4 py-2 rounded-xl disabled:opacity-50"
+              >
+                {voiding ? 'Anulando...' : 'Confirmar anulación'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {registerId === null && (
         <div className="mb-4 flex items-center justify-between gap-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded-xl px-4 py-3 text-sm">

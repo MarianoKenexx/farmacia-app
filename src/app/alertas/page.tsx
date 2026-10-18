@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAlerts } from '@/context/AlertsContext'
 import type { Alert } from '@/types'
-import { Bell, BellRing, CheckCheck, AlertTriangle, PackageX, Ban, TrendingUp, Package } from 'lucide-react'
+import { Bell, BellRing, CheckCheck, AlertTriangle, PackageX, Ban, TrendingUp, Package, LockOpen } from 'lucide-react'
 
 const ICON: Record<string, typeof Bell> = {
   faltante: AlertTriangle,
@@ -11,6 +11,7 @@ const ICON: Record<string, typeof Bell> = {
   sin_stock: PackageX,
   stock_bajo: Package,
   venta_anulada: Ban,
+  apertura_no_coincide: LockOpen,
 }
 
 const TONE: Record<string, string> = {

@@ -1,7 +1,8 @@
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Printer, Save, CheckCircle, ImagePlus, Trash2, Building2, Receipt, Monitor } from 'lucide-react'
+import { Printer, Save, CheckCircle, ImagePlus, Trash2, Building2, Receipt, Monitor, KeyRound } from 'lucide-react'
 import { useBranding, uploadLogo, type AppSettings } from '@/context/BrandingContext'
+import { supabase } from '@/lib/supabase'
 import {
   DEFAULT_PRINTER_CONFIG,
   loadPrinterConfig,
@@ -95,8 +96,45 @@ export default function ConfiguracionPage() {
   const [status, setStatus] = useState<{ ok: boolean; msg: string } | null>(null)
   const [saving, setSaving] = useState(false)
 
+  // Mi PIN de autorización (para confirmar anulaciones que pide un cajero desde el Punto de Venta)
+  const [pinSet, setPinSet] = useState<boolean | null>(null)
+  const [pin1, setPin1] = useState('')
+  const [pin2, setPin2] = useState('')
+  const [pinStatus, setPinStatus] = useState<{ ok: boolean; msg: string } | null>(null)
+  const [pinSaving, setPinSaving] = useState(false)
+
   useEffect(() => { setPrinter(loadPrinterConfig()) }, [])
   useEffect(() => { if (loaded) setForm(settings) }, [loaded, settings])
+  useEffect(() => { refreshPinSet() }, [])
+
+  async function refreshPinSet() {
+    const { data } = await supabase.rpc('my_pin_set')
+    setPinSet(Boolean(data))
+  }
+
+  async function handleSavePin() {
+    setPinStatus(null)
+    if (!/^[0-9]{4,6}$/.test(pin1)) { setPinStatus({ ok: false, msg: 'Tiene que ser de 4 a 6 números.' }); return }
+    if (pin1 !== pin2) { setPinStatus({ ok: false, msg: 'Los dos PIN no coinciden.' }); return }
+    setPinSaving(true)
+    const { error } = await supabase.rpc('set_my_pin', { p_pin: pin1 })
+    setPinSaving(false)
+    if (error) { setPinStatus({ ok: false, msg: error.message }); return }
+    setPin1(''); setPin2('')
+    setPinStatus({ ok: true, msg: 'PIN guardado' })
+    refreshPinSet()
+    setTimeout(() => setPinStatus(null), 2500)
+  }
+
+  async function handleClearPin() {
+    setPinSaving(true)
+    const { error } = await supabase.rpc('clear_my_pin')
+    setPinSaving(false)
+    if (error) { setPinStatus({ ok: false, msg: error.message }); return }
+    setPinStatus({ ok: true, msg: 'PIN desactivado' })
+    refreshPinSet()
+    setTimeout(() => setPinStatus(null), 2500)
+  }
 
   const set = <K extends keyof AppSettings>(k: K, v: AppSettings[K]) => {
     setForm(f => ({ ...f, [k]: v }))
@@ -314,6 +352,67 @@ export default function ConfiguracionPage() {
                   <option value={3}>3 copias</option>
                 </select>
               </div>
+            </div>
+          </section>
+
+          {/* ── Mi PIN de autorización ── */}
+          <section className="bg-slate-800 border border-slate-700 rounded-2xl p-5 space-y-4">
+            <div>
+              <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+                <KeyRound className="w-4 h-4 text-emerald-400" /> Mi PIN de autorización
+              </h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Si un cajero necesita anular una venta recién cobrada, lo pide desde el Punto de Venta y
+                te va a pedir este PIN para confirmarlo ahí mismo, sin que vos tengas que entrar al sistema.
+                Es personal: no lo compartas con los cajeros.
+              </p>
+            </div>
+
+            {pinSet && (
+              <p className="text-xs text-emerald-400 flex items-center gap-1.5"><CheckCircle className="w-3.5 h-3.5" /> Ya tenés un PIN activo.</p>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-slate-400 mb-1.5">{pinSet ? 'Nuevo PIN (4 a 6 números)' : 'PIN (4 a 6 números)'}</p>
+                <input
+                  type="password" inputMode="numeric" maxLength={6}
+                  className={field} value={pin1}
+                  onChange={e => setPin1(e.target.value.replace(/\D/g, ''))}
+                  placeholder="••••"
+                />
+              </div>
+              <div>
+                <p className="text-xs text-slate-400 mb-1.5">Repetir PIN</p>
+                <input
+                  type="password" inputMode="numeric" maxLength={6}
+                  className={field} value={pin2}
+                  onChange={e => setPin2(e.target.value.replace(/\D/g, ''))}
+                  placeholder="••••"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={handleSavePin}
+                disabled={pinSaving || !pin1}
+                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold px-4 py-2 rounded-xl disabled:opacity-50"
+              >
+                {pinSaving ? 'Guardando...' : pinSet ? 'Cambiar PIN' : 'Activar PIN'}
+              </button>
+              {pinSet && (
+                <button
+                  onClick={handleClearPin}
+                  disabled={pinSaving}
+                  className="text-slate-400 hover:text-red-400 text-sm px-2 py-2 disabled:opacity-50"
+                >
+                  Desactivar
+                </button>
+              )}
+              {pinStatus && (
+                <span className={`text-sm ${pinStatus.ok ? 'text-emerald-400' : 'text-red-400'}`}>{pinStatus.msg}</span>
+              )}
             </div>
           </section>
 
