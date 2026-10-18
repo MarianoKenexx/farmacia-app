@@ -16,6 +16,8 @@ export interface AppSettings {
   ticket_cuit: string | null
   ticket_phone: string | null
   ticket_footer: string | null
+  owner_email: string | null
+  notify_on_close: boolean
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -30,6 +32,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   ticket_cuit: null,
   ticket_phone: null,
   ticket_footer: '¡Gracias por su compra!',
+  owner_email: null,
+  notify_on_close: true,
 }
 
 interface BrandingContextType {

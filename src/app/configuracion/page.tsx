@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Printer, Save, CheckCircle, ImagePlus, Trash2, Building2, Receipt, Monitor, KeyRound } from 'lucide-react'
+import { Printer, Save, CheckCircle, ImagePlus, Trash2, Building2, Receipt, Monitor, KeyRound, Mail } from 'lucide-react'
 import { useBranding, uploadLogo, type AppSettings } from '@/context/BrandingContext'
 import { supabase } from '@/lib/supabase'
 import {
@@ -169,6 +169,8 @@ export default function ConfiguracionPage() {
       ticket_cuit: form.ticket_cuit?.trim() || null,
       ticket_phone: form.ticket_phone?.trim() || null,
       ticket_footer: form.ticket_footer?.trim() || null,
+      owner_email: form.owner_email?.trim() || null,
+      notify_on_close: form.notify_on_close,
     })
     setSaving(false)
     setStatus(err ? { ok: false, msg: `No se pudo guardar: ${err}` } : { ok: true, msg: 'Guardado' })
@@ -353,6 +355,38 @@ export default function ConfiguracionPage() {
                 </select>
               </div>
             </div>
+          </section>
+
+          {/* ── Avisos ── */}
+          <section className="bg-slate-800 border border-slate-700 rounded-2xl p-5 space-y-4">
+            <div>
+              <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+                <Mail className="w-4 h-4 text-emerald-400" /> Avisos
+              </h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Cada vez que se cierra una caja (la cierre quien la cierre), te llega un resumen por mail:
+                total vendido, si hubo faltante o sobrante, y si hubo ventas anuladas.
+              </p>
+            </div>
+
+            <label className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm text-white">Mandarme el resumen al cerrar caja</p>
+                <p className="text-xs text-slate-500">Si lo apagás, no se envía ningún mail.</p>
+              </div>
+              <Toggle checked={form.notify_on_close} onChange={v => set('notify_on_close', v)} />
+            </label>
+
+            {form.notify_on_close && (
+              <div>
+                <p className="text-xs text-slate-400 mb-1.5">Tu mail</p>
+                <input
+                  type="email" className={field} value={form.owner_email ?? ''}
+                  onChange={e => set('owner_email', e.target.value)}
+                  placeholder="tu@mail.com"
+                />
+              </div>
+            )}
           </section>
 
           {/* ── Mi PIN de autorización ── */}

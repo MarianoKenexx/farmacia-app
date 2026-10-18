@@ -72,6 +72,12 @@ export default function CajaPage() {
     setActionError('')
     const { error } = await supabase.rpc('close_register', { p_amount: Number(closeAmount) })
     if (error) { setActionError(error.message); return }
+    // Avisa por mail (si está configurado). No bloquea el cierre si falla.
+    fetch('/api/notify-cierre', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ registerId: register.id }),
+    }).catch(() => {})
     setCloseDialog(false)
     setClosedMsg(`Caja cerrada. Monto contado registrado: ${fmt(Number(closeAmount))}`)
     setCloseAmount('')
