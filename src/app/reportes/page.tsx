@@ -2,9 +2,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
+import { useBranding } from '@/context/BrandingContext'
 import { inicioPeriodo, PERIODO_LABEL, type Periodo } from '@/lib/roles'
 import { METODO_LABEL } from '@/lib/ticket'
-import { TrendingUp, Trash2, AlertTriangle, Receipt, ShoppingCart, Wallet } from 'lucide-react'
+import { TrendingUp, Trash2, AlertTriangle, Receipt, ShoppingCart, Wallet, Printer } from 'lucide-react'
 
 interface SaleRow {
   id: string
@@ -36,6 +37,7 @@ const fmtQty = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2).re
 
 export default function ReportesPage() {
   const { profile } = useAuth()
+  const { settings: brand } = useBranding()
   const canDelete = profile?.role === 'superadmin'
 
   const [periodo, setPeriodo] = useState<Periodo>('hoy')
@@ -107,7 +109,7 @@ export default function ReportesPage() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <div className="mb-6 flex items-start justify-between gap-4">
+      <div className="mb-6 flex items-start justify-between gap-4 no-print">
         <div>
           <div className="flex items-center gap-3 mb-1">
             <div className="w-2 h-6 bg-amber-500 rounded-full" />
@@ -115,17 +117,35 @@ export default function ReportesPage() {
           </div>
           <p className="text-slate-400 ml-5">Ventas y productos más vendidos</p>
         </div>
-        {canDelete && sales.length > 0 && (
-          <button
-            onClick={() => setConfirm(true)}
-            className="flex items-center gap-2 text-sm text-red-400 hover:text-red-300 bg-red-500/5 hover:bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-xl"
-          >
-            <Trash2 className="w-4 h-4" /> Borrar ventas de “{PERIODO_LABEL[periodo]}”
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {!loading && sales.length > 0 && (
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-2 text-sm text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-2 rounded-xl"
+            >
+              <Printer className="w-4 h-4" /> Exportar PDF
+            </button>
+          )}
+          {canDelete && sales.length > 0 && (
+            <button
+              onClick={() => setConfirm(true)}
+              className="flex items-center gap-2 text-sm text-red-400 hover:text-red-300 bg-red-500/5 hover:bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-xl"
+            >
+              <Trash2 className="w-4 h-4" /> Borrar ventas de “{PERIODO_LABEL[periodo]}”
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-5">
+      {/* Encabezado solo para impresión */}
+      <div className="print-only" style={{ marginBottom: '16px' }}>
+        <h1 style={{ fontSize: '20px', fontWeight: 'bold', margin: 0 }}>{brand.business_name || 'Farmacia'} — Reporte de ventas</h1>
+        <p style={{ fontSize: '12px', color: '#555', margin: '4px 0 0' }}>Período: {PERIODO_LABEL[periodo]}</p>
+        <p style={{ fontSize: '12px', color: '#555' }}>Impreso: {new Date().toLocaleString('es-AR')}</p>
+        <hr style={{ margin: '10px 0' }} />
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-5 no-print">
         {PERIODOS.map(p => (
           <button
             key={p}
