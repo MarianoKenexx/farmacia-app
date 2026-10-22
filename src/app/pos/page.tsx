@@ -44,6 +44,13 @@ export default function POSPage() {
   const [voidedMsg, setVoidedMsg] = useState('')
   const [obrasSociales, setObrasSociales] = useState<ObraSocial[]>([])
   const [obraSocialId, setObraSocialId] = useState<string>('')
+  const [customers, setCustomers] = useState<{ id: string; name: string; phone: string | null }[]>([])
+  const [customerId, setCustomerId] = useState<string>('')
+  const [customerName, setCustomerName] = useState<string>('')
+  const [customerSearch, setCustomerSearch] = useState('')
+  const [customerQuickName, setCustomerQuickName] = useState('')
+  const [customerQuickPhone, setCustomerQuickPhone] = useState('')
+  const [customerQuickSaving, setCustomerQuickSaving] = useState(false)
   const [quickAdd, setQuickAdd] = useState<{ barcode: string } | null>(null)
   const [quickName, setQuickName] = useState('')
   const [quickLab, setQuickLab] = useState('')
@@ -66,6 +73,29 @@ export default function POSPage() {
   async function fetchObrasSociales() {
     const { data } = await supabase.from('obras_sociales').select('*').eq('active', true).order('nombre')
     setObrasSociales(data || [])
+  }
+
+  async function buscarClientes(q: string) {
+    setCustomerSearch(q)
+    if (!q.trim()) { setCustomers([]); return }
+    const { data } = await supabase.from('customers').select('id, name, phone').ilike('name', `%${q.trim()}%`).limit(8)
+    setCustomers(data || [])
+  }
+
+  async function crearClienteRapido() {
+    if (!customerQuickName.trim()) return
+    setCustomerQuickSaving(true)
+    const { data, error } = await supabase.from('customers')
+      .insert({ name: customerQuickName.trim(), phone: customerQuickPhone.trim() || null })
+      .select('id, name, phone').single()
+    setCustomerQuickSaving(false)
+    if (error || !data) return
+    setCustomerId(data.id)
+    setCustomerName(data.name)
+    setCustomerSearch('')
+    setCustomers([])
+    setCustomerQuickName('')
+    setCustomerQuickPhone('')
   }
 
   async function fetchRegister() {
@@ -282,6 +312,7 @@ export default function POSPage() {
       })),
       p_payment_method: payMethod,
       p_obra_social_id: obraSocialId || null,
+      p_customer_id: customerId || null,
     })
 
     if (error || !result) {
@@ -326,6 +357,10 @@ export default function POSPage() {
     setCart([])
     setPayMethod('efectivo')
     setObraSocialId('')
+    setCustomerId('')
+    setCustomerName('')
+    setCustomerSearch('')
+    setCustomers([])
     setProcessing(false)
     setSuccess(true)
     fetchProducts()
@@ -709,6 +744,51 @@ export default function POSPage() {
                 Hay productos que requieren receta. Pedila antes de cobrar.
               </div>
             )}
+
+            <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4 relative">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Cliente (opcional)</p>
+              {customerId ? (
+                <div className="flex items-center justify-between bg-slate-900 rounded-xl px-3 py-2">
+                  <span className="text-sm text-white">{customerName}</span>
+                  <button onClick={() => { setCustomerId(''); setCustomerName('') }} className="text-xs text-slate-400 hover:text-slate-200">quitar</button>
+                </div>
+              ) : (
+                <>
+                  <Input
+                    value={customerSearch}
+                    onChange={e => buscarClientes(e.target.value)}
+                    placeholder="Buscar cliente por nombre..."
+                    className="bg-slate-900 border-slate-700 text-white placeholder-slate-500"
+                  />
+                  {customerSearch.trim() && (
+                    <div className="absolute z-10 left-4 right-4 bg-slate-900 border border-slate-700 rounded-xl mt-1 overflow-hidden">
+                      {customers.map(c => (
+                        <button
+                          key={c.id}
+                          onClick={() => { setCustomerId(c.id); setCustomerName(c.name); setCustomerSearch(''); setCustomers([]) }}
+                          className="w-full text-left px-3 py-2 text-sm text-white hover:bg-slate-800"
+                        >
+                          {c.name}{c.phone ? ` · ${c.phone}` : ''}
+                        </button>
+                      ))}
+                      <div className="border-t border-slate-700 p-2 space-y-1.5">
+                        <p className="text-xs text-slate-500">¿No está? Cargalo rápido:</p>
+                        <div className="flex gap-1.5">
+                          <Input value={customerQuickName} onChange={e => setCustomerQuickName(e.target.value)} placeholder="Nombre" className="bg-slate-800 border-slate-700 text-white text-xs h-8" />
+                          <Input value={customerQuickPhone} onChange={e => setCustomerQuickPhone(e.target.value)} placeholder="Tel." className="bg-slate-800 border-slate-700 text-white text-xs h-8 w-24" />
+                          <Button size="sm" disabled={!customerQuickName.trim() || customerQuickSaving} onClick={crearClienteRapido} className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700 shrink-0">
+                            {customerQuickSaving ? '...' : 'Agregar'}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+              {customerId && (
+                <p className="text-xs text-slate-500 mt-1.5">Así queda asociada la venta para recordatorios de recompra.</p>
+              )}
+            </div>
 
             <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Cobertura (opcional)</p>

@@ -11,7 +11,7 @@ import { BookOpen, ArrowLeft } from 'lucide-react'
 // cuándo se revisó por última vez.
 // ════════════════════════════════════════════════════════════════════
 
-const ULTIMA_ACTUALIZACION = '22/10/2026'
+const ULTIMA_ACTUALIZACION = '22/10/2026 (tarde)'
 
 const SECCIONES = [
   { id: 'roles', titulo: '1. Roles y quién ve qué' },
@@ -19,17 +19,19 @@ const SECCIONES = [
   { id: 'obras-sociales', titulo: '3. Ventas con obra social / cobertura' },
   { id: 'productos', titulo: '4. Productos' },
   { id: 'stock', titulo: '5. Stock' },
-  { id: 'proveedores', titulo: '6. Proveedores y compras' },
-  { id: 'clientes', titulo: '7. Clientes' },
-  { id: 'caja', titulo: '8. Caja (apertura, cierre y arqueo)' },
-  { id: 'historial', titulo: '9. Historial de cajas' },
-  { id: 'reportes', titulo: '10. Reportes' },
-  { id: 'recetas-pendientes', titulo: '11. Recetas pendientes de reclamo' },
-  { id: 'auditoria-precios', titulo: '12. Auditoría de cambios de precio' },
-  { id: 'devoluciones', titulo: '13. Devoluciones' },
-  { id: 'alertas', titulo: '14. Alertas' },
-  { id: 'configuracion', titulo: '15. Configuración' },
-  { id: 'seguridad', titulo: '16. Por qué está armado así (seguridad y antifraude)' },
+  { id: 'vencimientos', titulo: '6. Vencimientos' },
+  { id: 'proveedores', titulo: '7. Proveedores y compras' },
+  { id: 'clientes', titulo: '8. Clientes' },
+  { id: 'recompras', titulo: '9. Recompras (recordatorio de recompra)' },
+  { id: 'caja', titulo: '10. Caja (apertura, cierre y arqueo)' },
+  { id: 'historial', titulo: '11. Historial de cajas' },
+  { id: 'reportes', titulo: '12. Reportes' },
+  { id: 'recetas-pendientes', titulo: '13. Recetas pendientes de reclamo' },
+  { id: 'auditoria-precios', titulo: '14. Auditoría de cambios de precio' },
+  { id: 'devoluciones', titulo: '15. Devoluciones' },
+  { id: 'alertas', titulo: '16. Alertas' },
+  { id: 'configuracion', titulo: '17. Configuración' },
+  { id: 'seguridad', titulo: '18. Por qué está armado así (seguridad y antifraude)' },
 ]
 
 function Seccion({ id, titulo, children }: { id: string; titulo: string; children: React.ReactNode }) {
@@ -103,51 +105,61 @@ export default function ManualPage() {
         <p>Muestra el stock actual de cada producto y permite hacer ajustes manuales (por ejemplo, si se rompió algo o hubo un error de conteo). Cada movimiento de stock (venta, devolución, anulación, compra, ajuste manual) queda en un historial con quién lo hizo y por qué.</p>
       </Seccion>
 
-      <Seccion id="proveedores" titulo="6. Proveedores y compras">
+      <Seccion id="vencimientos" titulo="6. Vencimientos">
+        <p>Desde Stock → pestaña "Vencimientos" se pueden cargar lotes con su fecha de vencimiento y cantidad. Es un control aparte, pensado solo para avisar — no reemplaza ni reduce automáticamente el stock general del producto.</p>
+        <p>Cada lote se marca en verde (sin problema), ámbar (vence en 15 días o menos) o rojo (ya vencido). Cuando hay lotes en esas últimas dos categorías, aparece un aviso arriba de la pantalla de Stock. Al retirar un lote de circulación (porque se vendió, se descartó o venció), se lo marca como "Dar de baja" para que deje de contar en los avisos.</p>
+      </Seccion>
+
+      <Seccion id="proveedores" titulo="7. Proveedores y compras">
         <p>Se cargan los proveedores (droguerías) con sus datos de contacto, y se registran las compras que se les hacen: qué producto, cuánta cantidad y a qué costo. Al guardar una compra, el sistema suma automáticamente ese stock y actualiza el precio de costo del producto — no hace falta cargarlo dos veces. Queda un historial de compras con fecha, proveedor, factura, quién la registró y el total.</p>
       </Seccion>
 
-      <Seccion id="clientes" titulo="7. Clientes">
-        <p>Base de datos simple de clientes (nombre, teléfono, email, DNI) para asociar a una venta si hace falta.</p>
+      <Seccion id="clientes" titulo="8. Clientes">
+        <p>Base de datos simple de clientes (nombre, teléfono, email, DNI). En el POS se puede elegir un cliente para la venta (buscándolo o cargándolo rápido ahí mismo) — asociar la venta a un cliente es lo que permite que después aparezca en "Recompras" si el producto tiene tratamiento crónico.</p>
       </Seccion>
 
-      <Seccion id="caja" titulo="8. Caja (apertura, cierre y arqueo)">
+      <Seccion id="recompras" titulo="9. Recompras (recordatorio de recompra)">
+        <p>Si un producto tiene cargados los "días de tratamiento" (en Productos — por ejemplo, 30 días para un tratamiento crónico), y se vendió asociado a un cliente, esta pantalla calcula cuándo le tocaría volver a comprarlo y arma una lista con los que están por terminárselo o ya se les debería haber terminado.</p>
+        <p>Es solo una lista para que el personal llame o le escriba al cliente — la app todavía no manda avisos automáticos por WhatsApp ni SMS.</p>
+      </Seccion>
+
+      <Seccion id="caja" titulo="10. Caja (apertura, cierre y arqueo)">
         <p>Al empezar el turno se <b>abre la caja</b> con el monto inicial en efectivo. Durante el turno, cada venta en efectivo suma al "esperado en caja". Al cerrar, se cuenta la plata física y se carga ese monto — ahí se compara contra lo esperado.</p>
         <p>Los cajeros ven una versión "a ciegas": pueden abrir y cerrar caja, pero no ven cuánto "debería" dar, para que no puedan ajustar el conteo. Esa comparación (diferencia) solo la ve un administrador o superadmin.</p>
         <p>Si en el turno hubo ventas con cobertura de obra social, aparece un cuadro aparte aclarando que esa plata no es un faltante: es dinero que todavía no se cobró y se va a reclamar por separado (ver sección 11). El número que tiene que coincidir con el efectivo contado es "Cobrado real", no el total bruto de ventas.</p>
       </Seccion>
 
-      <Seccion id="historial" titulo="9. Historial de cajas">
+      <Seccion id="historial" titulo="11. Historial de cajas">
         <p>Lista de todas las cajas abiertas y cerradas, con el detalle de ventas de cada una, la diferencia de cada arqueo, y un resumen del período elegido (hoy / semana / mes / todo). Un administrador puede anular una venta (devuelve el stock y queda anotado quién y por qué) o registrar una devolución parcial de un producto puntual. Un superadmin además puede borrar una caja entera (sin dejar rastro — para errores de carga, no para ventas reales; esas mejor anularlas).</p>
       </Seccion>
 
-      <Seccion id="reportes" titulo="10. Reportes">
+      <Seccion id="reportes" titulo="12. Reportes">
         <p>Totales de ventas por período, por método de pago, y ranking de productos más vendidos. También muestra el total cubierto por obras sociales del período, separado del total cobrado.</p>
       </Seccion>
 
-      <Seccion id="recetas-pendientes" titulo="11. Recetas pendientes de reclamo">
+      <Seccion id="recetas-pendientes" titulo="13. Recetas pendientes de reclamo">
         <p>Es el seguimiento de todo lo que quedó pendiente de cobrarle a las obras sociales. Cada receta con cobertura pasa por tres estados: <b>pendiente → presentado → cobrado</b>.</p>
         <p>Un administrador puede marcar "presentado" (cuando ya se entregó la receta a la obra social). Pero el paso final, <b>"cobrado"</b> — confirmar que la plata efectivamente entró — <b>solo lo puede marcar el dueño (superadmin)</b>, y al hacerlo tiene que escribir el monto que realmente se cobró. Esto es a propósito: separa a quien hace el trámite de papeleo (que podría ser un administrador) de quien confirma que la plata llegó, para que no se preste a que alguien se quede con parte del dinero sin que se note.</p>
         <p>Si el monto cobrado no coincide con lo que la app esperaba, queda marcado en rojo con un ícono de alerta. Abajo hay un resumen por mes y por obra social (esperado vs. cobrado vs. diferencia) para cruzarlo con lo que informe mensualmente quien gestiona ese trámite, y que el arqueo mensual cierre bien.</p>
       </Seccion>
 
-      <Seccion id="auditoria-precios" titulo="12. Auditoría de cambios de precio">
+      <Seccion id="auditoria-precios" titulo="14. Auditoría de cambios de precio">
         <p>Cada vez que se cambia el precio de venta o de costo de un producto (desde Productos o desde cualquier otro lado), queda un registro automático de quién lo hizo, cuándo, y los valores anterior y nuevo. Esto no se puede desactivar ni evitar — está puesto directamente en la base de datos, no solo en la pantalla. Sirve para detectar, por ejemplo, que alguien baje un precio para cobrarle de menos a un conocido.</p>
       </Seccion>
 
-      <Seccion id="devoluciones" titulo="13. Devoluciones">
+      <Seccion id="devoluciones" titulo="15. Devoluciones">
         <p>Desde el Historial, un administrador puede devolver parcialmente un producto de una venta ya cobrada (por ejemplo, el cliente trajo de vuelta 1 de los 3 que llevó). Hay que indicar el producto, la cantidad y el motivo. El sistema repone el stock, descuenta lo que corresponda del total de la venta, y si ese producto tenía cobertura de obra social, recalcula también esa parte proporcionalmente.</p>
       </Seccion>
 
-      <Seccion id="alertas" titulo="14. Alertas">
+      <Seccion id="alertas" titulo="16. Alertas">
         <p>Avisos automáticos: stock bajo o agotado, diferencias de caja al cerrar, ventas anuladas y devoluciones registradas. Sirve como bitácora rápida de "qué pasó" sin tener que revisar todo el historial.</p>
       </Seccion>
 
-      <Seccion id="configuracion" titulo="15. Configuración">
+      <Seccion id="configuracion" titulo="17. Configuración">
         <p>Datos del negocio (nombre, logo), obras sociales (nombre y % de cobertura), notificaciones por mail al cerrar caja, y la configuración de facturación electrónica ARCA (cuando esté lista).</p>
       </Seccion>
 
-      <Seccion id="seguridad" titulo="16. Por qué está armado así (seguridad y antifraude)">
+      <Seccion id="seguridad" titulo="18. Por qué está armado así (seguridad y antifraude)">
         <p>La idea general detrás de varias de estas decisiones: separar "quien hace la tarea" de "quien controla que la tarea se hizo bien", para que ninguna persona sola pueda tocar algo y además borrar el rastro de que lo tocó.</p>
         <ul className="list-disc pl-5 space-y-1">
           <li>Los cajeros no ven cuánto "debería" haber en caja, para que no ajusten el conteo a ese número.</li>

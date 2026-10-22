@@ -19,9 +19,22 @@ export interface Product {
   unidades_por_envase?: number
   nombre_fraccion?: string
   tipo_venta: 'libre' | 'receta' | 'receta_archivada'
+  dias_tratamiento?: number | null
   active: boolean
   created_at: string
   categories?: Category
+}
+
+export interface Lote {
+  id: string
+  product_id: string
+  fecha_vencimiento: string
+  cantidad: number
+  nota?: string | null
+  consumido: boolean
+  created_by?: string | null
+  created_at: string
+  products?: Product
 }
 
 export interface ObraSocial {
