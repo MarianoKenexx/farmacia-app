@@ -487,22 +487,18 @@ export default function ConfiguracionPage() {
                 <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-emerald-400" /> Certificado digital
                 </h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  Cuando tengas la Clave Fiscal y hayas generado el certificado en ARCA, pegalo acá.
-                  Queda guardado en un lugar especial que ni siquiera yo puedo leer — solo la aplicación
-                  lo usa, en el momento de facturar. Podés cargarlo vos mismo cuando lo tengas, sin que
-                  nadie tenga que tocar el código de la aplicación.
-                </p>
               </div>
 
               {arcaCargado !== null && (
                 arcaCargado ? (
                   <p className="text-xs text-emerald-400 flex items-center gap-1.5">
-                    <CheckCircle className="w-3.5 h-3.5" /> Ya hay un certificado cargado
+                    <span>✅</span> Ya hay un certificado cargado
                     {arcaActualizado ? ` (desde ${new Date(arcaActualizado).toLocaleDateString('es-AR')})` : ''}.
                   </p>
                 ) : (
-                  <p className="text-xs text-slate-500">Todavía no se cargó ningún certificado.</p>
+                  <p className="text-xs text-slate-500 flex items-center gap-1.5">
+                    <span>❌</span> Todavía no se cargó ningún certificado.
+                  </p>
                 )
               )}
 
