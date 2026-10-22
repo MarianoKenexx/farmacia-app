@@ -110,7 +110,10 @@ export default function ProductosPage() {
 
   async function handleSave() {
     setSaving(true)
-    const uPorE = Math.max(1, parseInt(form.unidades_por_envase) || 1)
+    // Los medicamentos bajo receta (o receta archivada) no se pueden fraccionar:
+    // siempre se venden en su envase cerrado, con el prospecto completo.
+    const esLibre = (form.tipo_venta || 'libre') === 'libre'
+    const uPorE = esLibre ? Math.max(1, parseInt(form.unidades_por_envase) || 1) : 1
     const payload: any = {
       name: form.name,
       barcode: form.barcode || null,
@@ -374,7 +377,14 @@ export default function ProductosPage() {
               </div>
               <div>
                 <Label>Tipo de venta</Label>
-                <Select value={form.tipo_venta} onValueChange={v => setForm({...form, tipo_venta: v})}>
+                <Select
+                  value={form.tipo_venta}
+                  onValueChange={v => setForm((f: any) => ({
+                    ...f, tipo_venta: v,
+                    // Si deja de ser venta libre, no puede quedar fraccionado
+                    ...(v !== 'libre' ? { unidades_por_envase: 1, nombre_fraccion: 'unidad' } : {}),
+                  }))}
+                >
                   <SelectTrigger className={TIPO_VENTA_TRIGGER_CLASS[form.tipo_venta as Product['tipo_venta']] ?? ''}>
                     <span>{TIPO_VENTA_LABEL[form.tipo_venta as Product['tipo_venta']] ?? 'Venta libre'}</span>
                   </SelectTrigger>
@@ -412,43 +422,52 @@ export default function ProductosPage() {
               </div>
             </div>
 
-            {/* Contenido del envase / fraccionamiento */}
-            <div className="border border-slate-200 rounded-xl p-3 bg-slate-50 space-y-3">
-              <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Contenido del envase</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label>Unidades por caja</Label>
-                  <Input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={form.unidades_por_envase}
-                    onChange={e => setForm({...form, unidades_por_envase: e.target.value})}
-                  />
+            {/* Contenido del envase / fraccionamiento: solo para venta libre.
+                Un medicamento bajo receta (o archivada) siempre se vende en
+                su envase cerrado, con el prospecto completo. */}
+            {form.tipo_venta === 'libre' ? (
+              <div className="border border-slate-200 rounded-xl p-3 bg-slate-50 space-y-3">
+                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Contenido del envase</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Unidades por caja</Label>
+                    <Input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={form.unidades_por_envase}
+                      onChange={e => setForm({...form, unidades_por_envase: e.target.value})}
+                    />
+                    {uPorE > 1 && (
+                      <p className="text-xs text-emerald-600 mt-1">
+                        {form.stock || 0} cajas → {(parseInt(form.stock) || 0) * uPorE} {form.nombre_fraccion || 'unidades'}
+                      </p>
+                    )}
+                  </div>
                   {uPorE > 1 && (
-                    <p className="text-xs text-emerald-600 mt-1">
-                      {form.stock || 0} cajas → {(parseInt(form.stock) || 0) * uPorE} {form.nombre_fraccion || 'unidades'}
-                    </p>
+                    <div>
+                      <Label>Nombre de la fracción</Label>
+                      <Input
+                        placeholder="ej: blister, tira, comprimido"
+                        value={form.nombre_fraccion}
+                        onChange={e => setForm({...form, nombre_fraccion: e.target.value})}
+                      />
+                    </div>
                   )}
                 </div>
                 {uPorE > 1 && (
-                  <div>
-                    <Label>Nombre de la fracción</Label>
-                    <Input
-                      placeholder="ej: blister, tira, comprimido"
-                      value={form.nombre_fraccion}
-                      onChange={e => setForm({...form, nombre_fraccion: e.target.value})}
-                    />
+                  <div className="text-xs text-slate-500 bg-white rounded-lg p-2 border border-slate-200">
+                    💊 En el POS aparecerán dos botones: <strong>Caja completa</strong> ({fmt(Number(form.sale_price) || 0)}) y{' '}
+                    <strong>1 {form.nombre_fraccion || 'unidad'}</strong> ({fmt((Number(form.sale_price) || 0) / uPorE)})
                   </div>
                 )}
               </div>
-              {uPorE > 1 && (
-                <div className="text-xs text-slate-500 bg-white rounded-lg p-2 border border-slate-200">
-                  💊 En el POS aparecerán dos botones: <strong>Caja completa</strong> ({fmt(Number(form.sale_price) || 0)}) y{' '}
-                  <strong>1 {form.nombre_fraccion || 'unidad'}</strong> ({fmt((Number(form.sale_price) || 0) / uPorE)})
-                </div>
-              )}
-            </div>
+            ) : (
+              <div className="border border-amber-200 rounded-xl p-3 bg-amber-50 text-xs text-amber-700">
+                🔒 Al ser {TIPO_VENTA_LABEL[form.tipo_venta as Product['tipo_venta']].toLowerCase()}, este producto no se
+                puede fraccionar: siempre se vende el envase cerrado completo.
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>

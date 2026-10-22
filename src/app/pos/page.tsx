@@ -545,7 +545,9 @@ export default function POSPage() {
               <div className="mt-2 space-y-1 max-h-64 overflow-y-auto">
                 {filtered.slice(0, 10).map(p => {
                   const uPorE = p.unidades_por_envase ?? 1
-                  const canFraccionar = uPorE > 1
+                  // Un medicamento bajo receta (o archivada) nunca se fracciona,
+                  // aunque haya quedado algún dato viejo con unidades por caja > 1.
+                  const canFraccionar = uPorE > 1 && p.tipo_venta === 'libre'
                   const nombreFrac = p.nombre_fraccion ?? 'unidad'
                   return (
                     <div key={p.id} className="rounded-xl overflow-hidden border border-slate-700">
