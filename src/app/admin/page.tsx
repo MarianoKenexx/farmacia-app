@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { supabase } from '@/lib/supabase'
-import { Users, Tag, ShoppingBag, Activity } from 'lucide-react'
+import { Users, Tag, ShoppingBag, Activity, BookOpen } from 'lucide-react'
 import Link from 'next/link'
 
 export default function AdminPage() {
@@ -68,6 +68,15 @@ export default function AdminPage() {
           <Tag className="w-8 h-8 text-emerald-400 mb-4" />
           <h3 className="font-semibold text-white text-lg mb-1">Categorías</h3>
           <p className="text-slate-400 text-sm">Administrar categorías de productos</p>
+        </Link>
+
+        <Link
+          href="/admin/manual"
+          className="bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-violet-500/50 rounded-2xl p-6 transition-all group"
+        >
+          <BookOpen className="w-8 h-8 text-violet-400 mb-4" />
+          <h3 className="font-semibold text-white text-lg mb-1">Manual de uso</h3>
+          <p className="text-slate-400 text-sm">Cómo funciona cada parte de la app, explicado en criollo</p>
         </Link>
 
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-2xl p-6 opacity-50 cursor-not-allowed">

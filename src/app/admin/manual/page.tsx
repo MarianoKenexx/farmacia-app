@@ -1,0 +1,161 @@
+'use client'
+import Link from 'next/link'
+import { BookOpen, ArrowLeft } from 'lucide-react'
+
+// ════════════════════════════════════════════════════════════════════
+// Manual de uso de la app.
+//
+// Esta página se actualiza a mano cada vez que agregamos o cambiamos
+// una funcionalidad importante de la app (es parte del trabajo de cada
+// cambio, no algo aparte). "ÚLTIMA_ACTUALIZACION" de más abajo indica
+// cuándo se revisó por última vez.
+// ════════════════════════════════════════════════════════════════════
+
+const ULTIMA_ACTUALIZACION = '22/10/2026'
+
+const SECCIONES = [
+  { id: 'roles', titulo: '1. Roles y quién ve qué' },
+  { id: 'pos', titulo: '2. Punto de Venta (POS)' },
+  { id: 'obras-sociales', titulo: '3. Ventas con obra social / cobertura' },
+  { id: 'productos', titulo: '4. Productos' },
+  { id: 'stock', titulo: '5. Stock' },
+  { id: 'proveedores', titulo: '6. Proveedores y compras' },
+  { id: 'clientes', titulo: '7. Clientes' },
+  { id: 'caja', titulo: '8. Caja (apertura, cierre y arqueo)' },
+  { id: 'historial', titulo: '9. Historial de cajas' },
+  { id: 'reportes', titulo: '10. Reportes' },
+  { id: 'recetas-pendientes', titulo: '11. Recetas pendientes de reclamo' },
+  { id: 'auditoria-precios', titulo: '12. Auditoría de cambios de precio' },
+  { id: 'devoluciones', titulo: '13. Devoluciones' },
+  { id: 'alertas', titulo: '14. Alertas' },
+  { id: 'configuracion', titulo: '15. Configuración' },
+  { id: 'seguridad', titulo: '16. Por qué está armado así (seguridad y antifraude)' },
+]
+
+function Seccion({ id, titulo, children }: { id: string; titulo: string; children: React.ReactNode }) {
+  return (
+    <section id={id} className="scroll-mt-20 bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-3">
+      <h2 className="text-lg font-bold text-white">{titulo}</h2>
+      <div className="text-sm text-slate-300 leading-relaxed space-y-3">{children}</div>
+    </section>
+  )
+}
+
+export default function ManualPage() {
+  return (
+    <div className="p-6 max-w-4xl mx-auto space-y-6">
+      <div>
+        <Link href="/admin" className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-white mb-4">
+          <ArrowLeft className="w-3.5 h-3.5" /> Volver al panel admin
+        </Link>
+        <div className="flex items-center gap-3 mb-1">
+          <div className="w-2 h-6 bg-violet-500 rounded-full" />
+          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+            <BookOpen className="w-5 h-5 text-violet-400" /> Manual de uso
+          </h1>
+        </div>
+        <p className="text-slate-400 ml-5 text-sm">
+          Cómo funciona cada parte de la app, explicado en criollo. Esta página se va actualizando
+          cada vez que agregamos o cambiamos algo. Última revisión: <b className="text-slate-300">{ULTIMA_ACTUALIZACION}</b>.
+        </p>
+      </div>
+
+      {/* Índice */}
+      <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">Índice</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5">
+          {SECCIONES.map(s => (
+            <a key={s.id} href={`#${s.id}`} className="text-sm text-violet-300 hover:text-violet-200 hover:underline">
+              {s.titulo}
+            </a>
+          ))}
+        </div>
+      </div>
+
+      <Seccion id="roles" titulo="1. Roles y quién ve qué">
+        <p>Hay tres tipos de usuario:</p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li><b className="text-white">Cajero</b>: solo puede vender (POS), ver/cargar productos y stock (si se lo habilitás), y abrir/cerrar caja. <b>No puede ver</b> el Dashboard, Historial, Reportes, Recetas pendientes, Auditoría de precios, Proveedores/compras ni Configuración, aunque intente escribir la dirección a mano. Esto es a propósito: así no puede saber cuánto "debería" dar la caja y ajustar el conteo para que cierre.</li>
+          <li><b className="text-white">Administrador</b>: ve todo lo anterior más Dashboard, Historial, Reportes, Recetas pendientes (puede avanzar pendiente → presentado), Auditoría de precios, Proveedores y compras, y puede anular ventas o registrar devoluciones.</li>
+          <li><b className="text-white">Superadmin (dueño)</b>: todo lo de administrador, más el Panel Admin (usuarios, categorías, esta misma página), borrar cajas/ventas, y es el único que puede confirmar que una obra social efectivamente pagó (ver sección 11).</li>
+        </ul>
+        <p>A cada cajero/administrador también se le pueden prender o apagar secciones puntuales (por ejemplo, un cajero que además puede tocar Stock) desde Panel Admin → Usuarios.</p>
+      </Seccion>
+
+      <Seccion id="pos" titulo="2. Punto de Venta (POS)">
+        <p>Es la pantalla donde se cobra. Se busca el producto por nombre o se escanea el código de barras, se arma el carrito y se cobra con el método de pago correspondiente (efectivo, débito, crédito, transferencia, QR).</p>
+        <p>Si un producto tiene <b>unidades por envase</b> cargadas (por ejemplo, una caja de 30 comprimidos), se puede vender "fraccionado" (por unidad suelta) además de la caja cerrada — salvo que sea bajo receta (ver más abajo).</p>
+        <p>Si se escanea un código que no existe en el sistema, se abre un formulario rápido para darlo de alta en el momento (nombre, laboratorio, precio, stock inicial) y seguir con la venta.</p>
+      </Seccion>
+
+      <Seccion id="obras-sociales" titulo="3. Ventas con obra social / cobertura">
+        <p>Cada producto tiene un <b>tipo de venta</b>: venta libre (verde), bajo receta (ámbar) o receta archivada (rojo). Los bajo receta o receta archivada nunca se pueden fraccionar: siempre se vende el envase cerrado completo, aunque tenga unidades por caja cargadas.</p>
+        <p>En el POS se puede elegir una obra social para la venta. Cada producto del carrito tiene un check "Con cobertura" (tildado por defecto en los que son bajo receta, destildado en venta libre) — así, en una misma venta, un producto puede tener descuento de obra social y otro no, aunque haya una sola obra social elegida.</p>
+        <p>El descuento se calcula solo sobre los productos tildados, usando el % que tenga cargado esa obra social (Configuración → Obras sociales). Lo que paga el cliente (en efectivo/tarjeta) es el total ya con el descuento aplicado — eso es lo que ingresa como "venta" en la caja. La parte que cubre la obra social queda registrada aparte como <b>pendiente de reclamo</b> (ver sección 11), porque esa plata todavía no entró, hay que reclamarla.</p>
+      </Seccion>
+
+      <Seccion id="productos" titulo="4. Productos">
+        <p>Alta, baja y edición de productos: nombre, laboratorio, categoría, código de barras, precio de costo, precio de venta, IVA, stock mínimo (para alertas), unidades por envase (para fraccionar) y tipo de venta (libre / receta / receta archivada).</p>
+        <p>Cualquier cambio de precio de venta o de costo queda anotado automáticamente en la Auditoría de precios (sección 12), aunque se edite el producto desde acá.</p>
+      </Seccion>
+
+      <Seccion id="stock" titulo="5. Stock">
+        <p>Muestra el stock actual de cada producto y permite hacer ajustes manuales (por ejemplo, si se rompió algo o hubo un error de conteo). Cada movimiento de stock (venta, devolución, anulación, compra, ajuste manual) queda en un historial con quién lo hizo y por qué.</p>
+      </Seccion>
+
+      <Seccion id="proveedores" titulo="6. Proveedores y compras">
+        <p>Se cargan los proveedores (droguerías) con sus datos de contacto, y se registran las compras que se les hacen: qué producto, cuánta cantidad y a qué costo. Al guardar una compra, el sistema suma automáticamente ese stock y actualiza el precio de costo del producto — no hace falta cargarlo dos veces. Queda un historial de compras con fecha, proveedor, factura, quién la registró y el total.</p>
+      </Seccion>
+
+      <Seccion id="clientes" titulo="7. Clientes">
+        <p>Base de datos simple de clientes (nombre, teléfono, email, DNI) para asociar a una venta si hace falta.</p>
+      </Seccion>
+
+      <Seccion id="caja" titulo="8. Caja (apertura, cierre y arqueo)">
+        <p>Al empezar el turno se <b>abre la caja</b> con el monto inicial en efectivo. Durante el turno, cada venta en efectivo suma al "esperado en caja". Al cerrar, se cuenta la plata física y se carga ese monto — ahí se compara contra lo esperado.</p>
+        <p>Los cajeros ven una versión "a ciegas": pueden abrir y cerrar caja, pero no ven cuánto "debería" dar, para que no puedan ajustar el conteo. Esa comparación (diferencia) solo la ve un administrador o superadmin.</p>
+        <p>Si en el turno hubo ventas con cobertura de obra social, aparece un cuadro aparte aclarando que esa plata no es un faltante: es dinero que todavía no se cobró y se va a reclamar por separado (ver sección 11). El número que tiene que coincidir con el efectivo contado es "Cobrado real", no el total bruto de ventas.</p>
+      </Seccion>
+
+      <Seccion id="historial" titulo="9. Historial de cajas">
+        <p>Lista de todas las cajas abiertas y cerradas, con el detalle de ventas de cada una, la diferencia de cada arqueo, y un resumen del período elegido (hoy / semana / mes / todo). Un administrador puede anular una venta (devuelve el stock y queda anotado quién y por qué) o registrar una devolución parcial de un producto puntual. Un superadmin además puede borrar una caja entera (sin dejar rastro — para errores de carga, no para ventas reales; esas mejor anularlas).</p>
+      </Seccion>
+
+      <Seccion id="reportes" titulo="10. Reportes">
+        <p>Totales de ventas por período, por método de pago, y ranking de productos más vendidos. También muestra el total cubierto por obras sociales del período, separado del total cobrado.</p>
+      </Seccion>
+
+      <Seccion id="recetas-pendientes" titulo="11. Recetas pendientes de reclamo">
+        <p>Es el seguimiento de todo lo que quedó pendiente de cobrarle a las obras sociales. Cada receta con cobertura pasa por tres estados: <b>pendiente → presentado → cobrado</b>.</p>
+        <p>Un administrador puede marcar "presentado" (cuando ya se entregó la receta a la obra social). Pero el paso final, <b>"cobrado"</b> — confirmar que la plata efectivamente entró — <b>solo lo puede marcar el dueño (superadmin)</b>, y al hacerlo tiene que escribir el monto que realmente se cobró. Esto es a propósito: separa a quien hace el trámite de papeleo (que podría ser un administrador) de quien confirma que la plata llegó, para que no se preste a que alguien se quede con parte del dinero sin que se note.</p>
+        <p>Si el monto cobrado no coincide con lo que la app esperaba, queda marcado en rojo con un ícono de alerta. Abajo hay un resumen por mes y por obra social (esperado vs. cobrado vs. diferencia) para cruzarlo con lo que informe mensualmente quien gestiona ese trámite, y que el arqueo mensual cierre bien.</p>
+      </Seccion>
+
+      <Seccion id="auditoria-precios" titulo="12. Auditoría de cambios de precio">
+        <p>Cada vez que se cambia el precio de venta o de costo de un producto (desde Productos o desde cualquier otro lado), queda un registro automático de quién lo hizo, cuándo, y los valores anterior y nuevo. Esto no se puede desactivar ni evitar — está puesto directamente en la base de datos, no solo en la pantalla. Sirve para detectar, por ejemplo, que alguien baje un precio para cobrarle de menos a un conocido.</p>
+      </Seccion>
+
+      <Seccion id="devoluciones" titulo="13. Devoluciones">
+        <p>Desde el Historial, un administrador puede devolver parcialmente un producto de una venta ya cobrada (por ejemplo, el cliente trajo de vuelta 1 de los 3 que llevó). Hay que indicar el producto, la cantidad y el motivo. El sistema repone el stock, descuenta lo que corresponda del total de la venta, y si ese producto tenía cobertura de obra social, recalcula también esa parte proporcionalmente.</p>
+      </Seccion>
+
+      <Seccion id="alertas" titulo="14. Alertas">
+        <p>Avisos automáticos: stock bajo o agotado, diferencias de caja al cerrar, ventas anuladas y devoluciones registradas. Sirve como bitácora rápida de "qué pasó" sin tener que revisar todo el historial.</p>
+      </Seccion>
+
+      <Seccion id="configuracion" titulo="15. Configuración">
+        <p>Datos del negocio (nombre, logo), obras sociales (nombre y % de cobertura), notificaciones por mail al cerrar caja, y la configuración de facturación electrónica ARCA (cuando esté lista).</p>
+      </Seccion>
+
+      <Seccion id="seguridad" titulo="16. Por qué está armado así (seguridad y antifraude)">
+        <p>La idea general detrás de varias de estas decisiones: separar "quien hace la tarea" de "quien controla que la tarea se hizo bien", para que ninguna persona sola pueda tocar algo y además borrar el rastro de que lo tocó.</p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>Los cajeros no ven cuánto "debería" haber en caja, para que no ajusten el conteo a ese número.</li>
+          <li>Anular una venta, devolver un producto o cambiar un precio siempre queda anotado con quién y por qué — no se puede hacer "en silencio".</li>
+          <li>Confirmar que una obra social pagó es un paso aparte, reservado al dueño, separado de quien hace el trámite de papeleo.</li>
+          <li>Varias de estas reglas están puestas directamente en la base de datos (no solo en la pantalla), para que no se puedan saltear editando algo por afuera de la app.</li>
+        </ul>
+      </Seccion>
+    </div>
+  )
+}
