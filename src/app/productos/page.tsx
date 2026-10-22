@@ -25,6 +25,12 @@ const emptyProduct = {
   image_url: '', unidades_por_envase: 1, nombre_fraccion: 'unidad', tipo_venta: 'libre' as Product['tipo_venta'],
 }
 
+const TIPO_VENTA_TRIGGER_CLASS: Record<Product['tipo_venta'], string> = {
+  libre: 'bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-100',
+  receta: 'bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-100',
+  receta_archivada: 'bg-red-100 text-red-800 border-red-300 hover:bg-red-100',
+}
+
 export default function ProductosPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -369,13 +375,13 @@ export default function ProductosPage() {
               <div>
                 <Label>Tipo de venta</Label>
                 <Select value={form.tipo_venta} onValueChange={v => setForm({...form, tipo_venta: v})}>
-                  <SelectTrigger>
+                  <SelectTrigger className={TIPO_VENTA_TRIGGER_CLASS[form.tipo_venta as Product['tipo_venta']] ?? ''}>
                     <span>{TIPO_VENTA_LABEL[form.tipo_venta as Product['tipo_venta']] ?? 'Venta libre'}</span>
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="libre">Venta libre</SelectItem>
-                    <SelectItem value="receta">Bajo receta</SelectItem>
-                    <SelectItem value="receta_archivada">Receta archivada</SelectItem>
+                    <SelectItem value="libre" className="bg-emerald-100 text-emerald-800 focus:bg-emerald-200 focus:text-emerald-900">Venta libre</SelectItem>
+                    <SelectItem value="receta" className="bg-amber-100 text-amber-800 focus:bg-amber-200 focus:text-amber-900">Bajo receta</SelectItem>
+                    <SelectItem value="receta_archivada" className="bg-red-100 text-red-800 focus:bg-red-200 focus:text-red-900">Receta archivada</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
