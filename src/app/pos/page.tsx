@@ -3,13 +3,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { fmtStock, fmtUnidades } from '@/lib/format'
 import { supabase } from '@/lib/supabase'
-import { Product, CartItem } from '@/types'
+import { Product, CartItem, ObraSocial, TIPO_VENTA_LABEL } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Search, Trash2, ShoppingCart, CheckCircle, Plus, Minus, Barcode, Package, Pill, Printer, Lock, Ban, X } from 'lucide-react'
+import { Search, Trash2, ShoppingCart, CheckCircle, Plus, Minus, Barcode, Package, Pill, Printer, Lock, Ban, X, HeartPulse, PackagePlus } from 'lucide-react'
 import Link from 'next/link'
 import { useAuth } from '@/context/AuthContext'
 import { loadPrinterConfig, printTicket, type TicketData } from '@/lib/ticket'
@@ -41,6 +41,15 @@ export default function POSPage() {
   const [voidError, setVoidError] = useState('')
   const [voiding, setVoiding] = useState(false)
   const [voidedMsg, setVoidedMsg] = useState('')
+  const [obrasSociales, setObrasSociales] = useState<ObraSocial[]>([])
+  const [obraSocialId, setObraSocialId] = useState<string>('')
+  const [quickAdd, setQuickAdd] = useState<{ barcode: string } | null>(null)
+  const [quickName, setQuickName] = useState('')
+  const [quickLab, setQuickLab] = useState('')
+  const [quickPrice, setQuickPrice] = useState('')
+  const [quickStock, setQuickStock] = useState('1')
+  const [quickSaving, setQuickSaving] = useState(false)
+  const [quickError, setQuickError] = useState('')
   const { profile } = useAuth()
   const { settings: brand } = useBranding()
   const barcodeRef = useRef<HTMLInputElement>(null)
@@ -49,8 +58,14 @@ export default function POSPage() {
   useEffect(() => {
     fetchProducts()
     fetchRegister()
+    fetchObrasSociales()
     barcodeRef.current?.focus()
   }, [])
+
+  async function fetchObrasSociales() {
+    const { data } = await supabase.from('obras_sociales').select('*').eq('active', true).order('nombre')
+    setObrasSociales(data || [])
+  }
 
   async function fetchRegister() {
     const { data } = await supabase
@@ -128,11 +143,54 @@ export default function POSPage() {
       setBarcode('')
       setBarcodeMsg(`✓ ${found.name}`)
       setTimeout(() => setBarcodeMsg(''), 2000)
+      barcodeRef.current?.focus()
     } else {
-      setBarcodeMsg('⚠ Código no encontrado')
-      setTimeout(() => setBarcodeMsg(''), 2000)
+      // Código nuevo: se carga una sola vez y queda guardado para la próxima
+      setQuickAdd({ barcode: code })
+      setQuickName('')
+      setQuickLab('')
+      setQuickPrice('')
+      setQuickStock('1')
+      setQuickError('')
       setBarcode('')
     }
+  }
+
+  async function handleQuickAddSave() {
+    if (!quickAdd) return
+    setQuickError('')
+    if (!quickName.trim()) { setQuickError('Escribí el nombre del producto.'); return }
+    const price = Number(quickPrice)
+    if (!price || price <= 0) { setQuickError('Escribí un precio de venta válido.'); return }
+    const stock = Number(quickStock)
+    if (isNaN(stock) || stock < 0) { setQuickError('La cantidad tiene que ser 0 o más.'); return }
+    setQuickSaving(true)
+    const { data, error } = await supabase
+      .from('products')
+      .insert({
+        name: quickName.trim(),
+        barcode: quickAdd.barcode,
+        laboratory: quickLab.trim() || null,
+        purchase_price: 0,
+        sale_price: price,
+        stock,
+        min_stock: 5,
+        iva_rate: 21,
+        active: true,
+        tipo_venta: 'libre',
+      })
+      .select('*')
+      .single()
+    setQuickSaving(false)
+    if (error || !data) {
+      setQuickError(error?.message || 'No se pudo guardar. Pedile a un administrador que lo cargue.')
+      return
+    }
+    setProducts(prev => [...prev, data as Product])
+    setQuickAdd(null)
+    setBarcodeMsg(`✓ ${data.name} (cargado)`)
+    setTimeout(() => setBarcodeMsg(''), 2500)
+    if (stock > 0) addToCart(data as Product, false)
     barcodeRef.current?.focus()
   }
 
@@ -168,7 +226,10 @@ export default function POSPage() {
 
   const subtotal = cart.reduce((s, i) => s + i.subtotal, 0)
   const iva = cart.reduce((s, i) => s + i.subtotal * (i.product.iva_rate / 100) / (1 + i.product.iva_rate / 100), 0)
-  const total = subtotal
+  const obraSocial = obrasSociales.find(o => o.id === obraSocialId) || null
+  const coberturaEstimada = obraSocial ? parseFloat((subtotal * obraSocial.porcentaje_cobertura / 100).toFixed(2)) : 0
+  const total = subtotal - coberturaEstimada
+  const requiereReceta = cart.some(i => i.product.tipo_venta && i.product.tipo_venta !== 'libre')
 
   const fmt = (n: number) =>
     new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(n)
@@ -204,6 +265,7 @@ export default function POSPage() {
     const { data: result, error } = await supabase.rpc('create_sale', {
       p_items: cart.map(i => ({ product_id: i.product.id, quantity: i.quantity, is_fraccion: i.is_fraccion })),
       p_payment_method: payMethod,
+      p_obra_social_id: obraSocialId || null,
     })
 
     if (error || !result) {
@@ -217,6 +279,7 @@ export default function POSPage() {
       id: string; invoice_number: number; created_at: string
       total: number; tax: number; neto: number
       lines: { product_id: string; unit_price: number; subtotal: number }[]
+      valor_cobertura: number; valor_lista: number
     }
 
     // Ticket
@@ -234,6 +297,8 @@ export default function POSPage() {
       total: Number(sale.total),
       paymentMethod: payMethod,
       cashier: profile?.name,
+      obraSocialNombre: obraSocial?.nombre,
+      valorCobertura: Number(sale.valor_cobertura) || 0,
     }
     setLastTicket(ticket)
     setLastSaleId(sale.id)
@@ -244,6 +309,7 @@ export default function POSPage() {
 
     setCart([])
     setPayMethod('efectivo')
+    setObraSocialId('')
     setProcessing(false)
     setSuccess(true)
     fetchProducts()
@@ -347,6 +413,67 @@ export default function POSPage() {
         </div>
       )}
 
+      {/* Código de barras nuevo: se carga una vez y después se reconoce solo */}
+      {quickAdd && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5 w-full max-w-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-white font-semibold flex items-center gap-2">
+                <PackagePlus className="w-4 h-4 text-emerald-400" /> Producto nuevo
+              </h2>
+              <button onClick={() => setQuickAdd(null)} className="text-slate-400 hover:text-white"><X className="w-4 h-4" /></button>
+            </div>
+            <p className="text-xs text-slate-400">
+              El código <span className="font-mono text-slate-300">{quickAdd.barcode}</span> no estaba cargado.
+              Completalo una sola vez — la próxima vez que se escanee, el sistema ya lo va a reconocer solo.
+            </p>
+            <div>
+              <p className="text-xs text-slate-400 mb-1.5">Nombre del producto</p>
+              <input
+                autoFocus value={quickName} onChange={e => setQuickName(e.target.value)}
+                placeholder="Ej: Ibuprofeno 400 mg x 10"
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-xs text-slate-400 mb-1.5">Laboratorio (opcional)</p>
+                <input
+                  value={quickLab} onChange={e => setQuickLab(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+              <div>
+                <p className="text-xs text-slate-400 mb-1.5">Precio de venta</p>
+                <input
+                  type="number" value={quickPrice} onChange={e => setQuickPrice(e.target.value)}
+                  placeholder="0"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+            </div>
+            <div>
+              <p className="text-xs text-slate-400 mb-1.5">Cantidad que estás cargando ahora</p>
+              <input
+                type="number" value={quickStock} onChange={e => setQuickStock(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+              <p className="text-xs text-slate-500 mt-1">Si ponés más de 0, se agrega directo al carrito para vender ahora.</p>
+            </div>
+            {quickError && <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-2">{quickError}</p>}
+            <div className="flex justify-end gap-2 pt-1">
+              <button onClick={() => setQuickAdd(null)} className="text-sm text-slate-300 hover:text-white px-3 py-2">Cancelar</button>
+              <button
+                onClick={handleQuickAddSave} disabled={quickSaving}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold px-4 py-2 rounded-xl disabled:opacity-50"
+              >
+                {quickSaving ? 'Guardando...' : 'Guardar y usar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {registerId === null && (
         <div className="mb-4 flex items-center justify-between gap-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded-xl px-4 py-3 text-sm">
           <span className="flex items-center gap-2"><Lock className="w-4 h-4" /> La caja está cerrada. Para cobrar, primero hay que abrirla.</span>
@@ -409,7 +536,14 @@ export default function POSPage() {
                       {/* Product info row */}
                       <div className="flex items-center justify-between px-3 pt-2.5 pb-1">
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-white truncate">{p.name}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-medium text-white truncate">{p.name}</p>
+                            {p.tipo_venta && p.tipo_venta !== 'libre' && (
+                              <span className="text-[10px] bg-amber-500/20 text-amber-400 rounded px-1.5 py-0.5 flex-shrink-0">
+                                {TIPO_VENTA_LABEL[p.tipo_venta]}
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-slate-400">{p.laboratory || p.barcode || '—'}</p>
                         </div>
                         <div className="text-right ml-3 flex-shrink-0">
@@ -535,6 +669,28 @@ export default function POSPage() {
           </Card>
 
           <div className="mt-3 space-y-3">
+            {requiereReceta && (
+              <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded-xl px-3 py-2 text-xs">
+                <HeartPulse className="w-4 h-4 flex-shrink-0" />
+                Hay productos que requieren receta. Pedila antes de cobrar.
+              </div>
+            )}
+
+            <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Cobertura (opcional)</p>
+              <Select value={obraSocialId || 'none'} onValueChange={v => setObraSocialId(!v || v === 'none' ? '' : v)}>
+                <SelectTrigger className="bg-slate-900 border-slate-700 text-white">
+                  <SelectValue placeholder="Sin obra social" />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectItem value="none">Sin obra social</SelectItem>
+                  {obrasSociales.map(o => (
+                    <SelectItem key={o.id} value={o.id}>{o.nombre} ({o.porcentaje_cobertura}%)</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="bg-slate-800 rounded-xl border border-slate-700 p-4 space-y-1.5 text-sm">
               <div className="flex justify-between text-slate-400">
                 <span>Subtotal neto</span><span>{fmt(subtotal - iva)}</span>
@@ -542,10 +698,20 @@ export default function POSPage() {
               <div className="flex justify-between text-slate-400">
                 <span>IVA</span><span>{fmt(iva)}</span>
               </div>
+              {obraSocial && (
+                <div className="flex justify-between text-amber-400">
+                  <span>Cobertura {obraSocial.nombre}</span><span>-{fmt(coberturaEstimada)}</span>
+                </div>
+              )}
               <div className="flex justify-between font-bold text-base pt-2 border-t border-slate-700">
-                <span className="text-white">TOTAL</span>
+                <span className="text-white">A COBRAR</span>
                 <span className="text-emerald-400">{fmt(total)}</span>
               </div>
+              {obraSocial && (
+                <p className="text-xs text-slate-500">
+                  Queda registrado para reclamarle {fmt(coberturaEstimada)} a {obraSocial.nombre} más adelante.
+                </p>
+              )}
             </div>
 
             <Select value={payMethod} onValueChange={v => setPayMethod(v ?? payMethod)}>

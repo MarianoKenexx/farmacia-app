@@ -15,6 +15,7 @@ import {
   BarChart2,
   SlidersHorizontal,
   Bell,
+  HeartPulse,
 } from 'lucide-react'
 import { useAlerts } from '@/context/AlertsContext'
 import { BrandMark } from '@/components/BrandMark'
@@ -30,6 +31,7 @@ const allNavItems = [
   { href: '/caja', label: 'Caja', icon: Landmark, permKey: 'caja' as SectionKey },
   { href: '/historial', label: 'Historial', icon: History, permKey: 'historial' as SectionKey },
   { href: '/reportes', label: 'Reportes', icon: BarChart2, permKey: 'reportes' as SectionKey },
+  { href: '/recetas-pendientes', label: 'Recetas pendientes', icon: HeartPulse, permKey: 'reportes' as SectionKey },
   { href: '/alertas', label: 'Alertas', icon: Bell, permKey: null },
   { href: '/configuracion', label: 'Configuración', icon: SlidersHorizontal, permKey: null },
 ]

@@ -18,9 +18,24 @@ export interface Product {
   image_url?: string
   unidades_por_envase?: number
   nombre_fraccion?: string
+  tipo_venta: 'libre' | 'receta' | 'receta_archivada'
   active: boolean
   created_at: string
   categories?: Category
+}
+
+export interface ObraSocial {
+  id: string
+  nombre: string
+  porcentaje_cobertura: number
+  active: boolean
+  created_at: string
+}
+
+export const TIPO_VENTA_LABEL: Record<Product['tipo_venta'], string> = {
+  libre: 'Venta libre',
+  receta: 'Bajo receta',
+  receta_archivada: 'Receta archivada',
 }
 
 export interface Customer {
@@ -58,8 +73,12 @@ export interface Sale {
   voided_at?: string | null
   voided_by?: string | null
   void_reason?: string | null
+  obra_social_id?: string | null
+  valor_cobertura?: number
+  estado_reclamo?: 'pendiente' | 'presentado' | 'cobrado' | null
   customers?: Customer
   sale_items?: SaleItem[]
+  obras_sociales?: ObraSocial
 }
 
 export interface SaleItem {

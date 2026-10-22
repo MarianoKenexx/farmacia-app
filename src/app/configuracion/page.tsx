@@ -1,8 +1,9 @@
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Printer, Save, CheckCircle, ImagePlus, Trash2, Building2, Receipt, Monitor, KeyRound, Mail, FileText, ShieldCheck } from 'lucide-react'
+import { Printer, Save, CheckCircle, ImagePlus, Trash2, Building2, Receipt, Monitor, KeyRound, Mail, FileText, ShieldCheck, HeartPulse, Plus, Pencil } from 'lucide-react'
 import { useBranding, uploadLogo, type AppSettings } from '@/context/BrandingContext'
 import { supabase } from '@/lib/supabase'
+import type { ObraSocial } from '@/types'
 import {
   DEFAULT_PRINTER_CONFIG,
   loadPrinterConfig,
@@ -111,10 +112,56 @@ export default function ConfiguracionPage() {
   const [arcaStatus, setArcaStatus] = useState<{ ok: boolean; msg: string } | null>(null)
   const [arcaSaving, setArcaSaving] = useState(false)
 
+  // Obras sociales / prepagas
+  const [obrasSociales, setObrasSociales] = useState<ObraSocial[]>([])
+  const [osForm, setOsForm] = useState<{ id: string | null; nombre: string; porcentaje_cobertura: string; active: boolean }>({
+    id: null, nombre: '', porcentaje_cobertura: '', active: true,
+  })
+  const [osSaving, setOsSaving] = useState(false)
+  const [osError, setOsError] = useState('')
+
   useEffect(() => { setPrinter(loadPrinterConfig()) }, [])
   useEffect(() => { if (loaded) setForm(settings) }, [loaded, settings])
   useEffect(() => { refreshPinSet() }, [])
   useEffect(() => { refreshArcaStatus() }, [])
+  useEffect(() => { refreshObrasSociales() }, [])
+
+  async function refreshObrasSociales() {
+    const { data } = await supabase.from('obras_sociales').select('*').order('nombre')
+    setObrasSociales(data || [])
+  }
+
+  function osEdit(o: ObraSocial) {
+    setOsForm({ id: o.id, nombre: o.nombre, porcentaje_cobertura: String(o.porcentaje_cobertura), active: o.active })
+    setOsError('')
+  }
+
+  function osNew() {
+    setOsForm({ id: null, nombre: '', porcentaje_cobertura: '', active: true })
+    setOsError('')
+  }
+
+  async function handleSaveObraSocial() {
+    setOsError('')
+    if (!osForm.nombre.trim()) { setOsError('Escribí el nombre.'); return }
+    const pct = Number(osForm.porcentaje_cobertura)
+    if (isNaN(pct) || pct < 0 || pct > 100) { setOsError('El porcentaje tiene que ser de 0 a 100.'); return }
+    setOsSaving(true)
+    const payload = { nombre: osForm.nombre.trim(), porcentaje_cobertura: pct, active: osForm.active }
+    const { error } = osForm.id
+      ? await supabase.from('obras_sociales').update(payload).eq('id', osForm.id)
+      : await supabase.from('obras_sociales').insert(payload)
+    setOsSaving(false)
+    if (error) { setOsError(error.message); return }
+    osNew()
+    refreshObrasSociales()
+  }
+
+  async function handleDeleteObraSocial(id: string) {
+    if (!confirm('¿Eliminar esta obra social? Las ventas ya hechas con ella no se van a borrar.')) return
+    await supabase.from('obras_sociales').delete().eq('id', id)
+    refreshObrasSociales()
+  }
 
   async function refreshArcaStatus() {
     const { data } = await supabase.rpc('arca_credentials_status')
@@ -543,6 +590,66 @@ export default function ConfiguracionPage() {
                 )}
               </div>
             </div>
+          </section>
+
+          {/* ── Obras sociales ── */}
+          <section className="bg-slate-800 border border-slate-700 rounded-2xl p-5 space-y-4">
+            <div>
+              <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+                <HeartPulse className="w-4 h-4 text-emerald-400" /> Obras sociales y prepagas
+              </h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Las que cargues acá van a aparecer para elegir en el Punto de Venta cuando un cliente
+                tenga cobertura. El % de cobertura es lo que se le descuenta al cliente y después
+                hay que reclamarle a la obra social (se ve en “Recetas pendientes”).
+              </p>
+            </div>
+
+            {obrasSociales.length > 0 && (
+              <div className="divide-y divide-slate-700/60 border border-slate-700 rounded-xl overflow-hidden">
+                {obrasSociales.map(o => (
+                  <div key={o.id} className="flex items-center justify-between gap-3 px-3 py-2.5 bg-slate-900/40">
+                    <div className="min-w-0">
+                      <p className="text-sm text-white truncate">{o.nombre}</p>
+                      <p className="text-xs text-slate-500">{o.porcentaje_cobertura}% de cobertura {!o.active && '· inactiva'}</p>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button onClick={() => osEdit(o)} className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-700">
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => handleDeleteObraSocial(o.id)} className="p-1.5 text-slate-400 hover:text-red-400 rounded-lg hover:bg-red-500/10">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_140px_auto] gap-3 items-end">
+              <div>
+                <p className="text-xs text-slate-400 mb-1.5">Nombre</p>
+                <input className={field} value={osForm.nombre} onChange={e => setOsForm(f => ({ ...f, nombre: e.target.value }))} placeholder="Ej: PAMI, OSDE, IOMA" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-400 mb-1.5">% de cobertura</p>
+                <input type="number" className={field} value={osForm.porcentaje_cobertura} onChange={e => setOsForm(f => ({ ...f, porcentaje_cobertura: e.target.value }))} placeholder="40" />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSaveObraSocial}
+                  disabled={osSaving}
+                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold px-4 py-2.5 rounded-xl disabled:opacity-50 whitespace-nowrap"
+                >
+                  {osForm.id ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                  {osSaving ? 'Guardando...' : osForm.id ? 'Guardar' : 'Agregar'}
+                </button>
+                {osForm.id && (
+                  <button onClick={osNew} className="text-slate-400 hover:text-white text-sm px-2 py-2.5">Cancelar</button>
+                )}
+              </div>
+            </div>
+            {osError && <p className="text-sm text-red-400">{osError}</p>}
           </section>
 
           {/* ── Mi PIN de autorización ── */}

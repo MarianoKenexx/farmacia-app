@@ -7,7 +7,7 @@
 export type Role = 'superadmin' | 'admin' | 'cajero'
 
 // Rutas que un cajero no puede abrir nunca
-export const CAJERO_BLOCKED_ROUTES = ['/dashboard', '/historial', '/reportes', '/configuracion', '/alertas']
+export const CAJERO_BLOCKED_ROUTES = ['/dashboard', '/historial', '/reportes', '/configuracion', '/alertas', '/recetas-pendientes']
 
 // Secciones de permisos que no aplican a cajeros (solo admin/superadmin)
 export const ADMIN_ONLY_SECTIONS = ['historial', 'reportes'] as const

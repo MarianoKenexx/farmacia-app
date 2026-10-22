@@ -60,6 +60,8 @@ export interface TicketData {
   paymentMethod: string
   cashier?: string
   reprint?: boolean
+  obraSocialNombre?: string
+  valorCobertura?: number
 }
 
 export const METODO_LABEL: Record<string, string> = {
@@ -117,6 +119,7 @@ export function buildTicketHtml(data: TicketData, printer: PrinterConfig, brand:
       <div class="row"><span>IVA</span><span>${money(data.iva)}</span></div>
       <div class="row big"><span>TOTAL</span><span>${money(data.total)}</span></div>
       <div class="row"><span>Pago</span><span>${esc(METODO_LABEL[data.paymentMethod] ?? data.paymentMethod)}</span></div>
+      ${data.obraSocialNombre ? `<div class="row small"><span>Cobertura ${esc(data.obraSocialNombre)}</span><span>-${money(data.valorCobertura ?? 0)}</span></div>` : ''}
       ${line}
       ${brand.ticket_footer ? `<div class="center">${esc(brand.ticket_footer)}</div>` : ''}
       <div class="center small">Comprobante no válido como factura</div>

@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { fmtStock, fmtUnidades } from '@/lib/format'
 import { supabase } from '@/lib/supabase'
-import { Product, Category } from '@/types'
+import { Product, Category, TIPO_VENTA_LABEL } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -22,7 +22,7 @@ import { Plus, Search, Pencil, Trash2, PackageX, ImageIcon, X } from 'lucide-rea
 const emptyProduct = {
   name: '', barcode: '', category_id: '', laboratory: '',
   purchase_price: 0, sale_price: 0, stock: 0, min_stock: 5, iva_rate: 21, active: true,
-  image_url: '', unidades_por_envase: 1, nombre_fraccion: 'unidad',
+  image_url: '', unidades_por_envase: 1, nombre_fraccion: 'unidad', tipo_venta: 'libre' as Product['tipo_venta'],
 }
 
 export default function ProductosPage() {
@@ -68,6 +68,7 @@ export default function ProductosPage() {
       image_url: p.image_url ?? '',
       unidades_por_envase: p.unidades_por_envase ?? 1,
       nombre_fraccion: p.nombre_fraccion ?? 'unidad',
+      tipo_venta: p.tipo_venta ?? 'libre',
     })
     setEditing(p.id)
     setImageFile(null)
@@ -117,6 +118,7 @@ export default function ProductosPage() {
       active: form.active,
       unidades_por_envase: uPorE,
       nombre_fraccion: uPorE > 1 ? (form.nombre_fraccion || 'unidad') : 'unidad',
+      tipo_venta: form.tipo_venta || 'libre',
     }
 
     let productId = editing
@@ -239,7 +241,14 @@ export default function ProductosPage() {
                             </div>
                           )}
                           <div>
-                            <p className="font-medium text-slate-800">{p.name}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-medium text-slate-800">{p.name}</p>
+                              {p.tipo_venta && p.tipo_venta !== 'libre' && (
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${p.tipo_venta === 'receta_archivada' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                                  {TIPO_VENTA_LABEL[p.tipo_venta]}
+                                </span>
+                              )}
+                            </div>
                             {p.barcode && <p className="text-xs text-slate-400">{p.barcode}</p>}
                           </div>
                         </div>
@@ -354,6 +363,19 @@ export default function ProductosPage() {
                     {categories.map(c => (
                       <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Tipo de venta</Label>
+                <Select value={form.tipo_venta} onValueChange={v => setForm({...form, tipo_venta: v})}>
+                  <SelectTrigger>
+                    <span>{TIPO_VENTA_LABEL[form.tipo_venta as Product['tipo_venta']] ?? 'Venta libre'}</span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="libre">Venta libre</SelectItem>
+                    <SelectItem value="receta">Bajo receta</SelectItem>
+                    <SelectItem value="receta_archivada">Receta archivada</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
