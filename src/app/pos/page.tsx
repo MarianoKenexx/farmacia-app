@@ -19,6 +19,7 @@ import { useBranding } from '@/context/BrandingContext'
 interface CartItemExt extends CartItem {
   unit_price: number   // precio real por unidad vendida (puede ser fraccion)
   is_fraccion: boolean // true = se vendió como fracción individual
+  aplica_cobertura: boolean // si este ítem en particular entra en el descuento de obra social
 }
 
 export default function POSPage() {
@@ -125,6 +126,9 @@ export default function POSPage() {
         subtotal: parseFloat((qty * product.sale_price).toFixed(2)),
         unit_price: unitPrice,
         is_fraccion: asFraccion,
+        // Por defecto, solo entran en el descuento de obra social los productos
+        // que no son de venta libre. El cajero lo puede cambiar igual, producto por producto.
+        aplica_cobertura: product.tipo_venta !== 'libre',
       }]
     })
     setSearch('')
@@ -224,10 +228,19 @@ export default function POSPage() {
     setCart(prev => prev.filter(i => !(i.product.id === productId && i.is_fraccion === isFraccion)))
   }
 
+  function toggleCobertura(productId: string, isFraccion: boolean) {
+    setCart(prev => prev.map(i =>
+      i.product.id === productId && i.is_fraccion === isFraccion
+        ? { ...i, aplica_cobertura: !i.aplica_cobertura }
+        : i
+    ))
+  }
+
   const subtotal = cart.reduce((s, i) => s + i.subtotal, 0)
   const iva = cart.reduce((s, i) => s + i.subtotal * (i.product.iva_rate / 100) / (1 + i.product.iva_rate / 100), 0)
   const obraSocial = obrasSociales.find(o => o.id === obraSocialId) || null
-  const coberturaEstimada = obraSocial ? parseFloat((subtotal * obraSocial.porcentaje_cobertura / 100).toFixed(2)) : 0
+  const baseCobertura = cart.filter(i => i.aplica_cobertura).reduce((s, i) => s + i.subtotal, 0)
+  const coberturaEstimada = obraSocial ? parseFloat((baseCobertura * obraSocial.porcentaje_cobertura / 100).toFixed(2)) : 0
   const total = subtotal - coberturaEstimada
   const requiereReceta = cart.some(i => i.product.tipo_venta && i.product.tipo_venta !== 'libre')
 
@@ -263,7 +276,10 @@ export default function POSPage() {
     // La venta se registra en la base "todo junto": venta, líneas, stock y movimientos.
     // Los precios los toma la base, no esta pantalla.
     const { data: result, error } = await supabase.rpc('create_sale', {
-      p_items: cart.map(i => ({ product_id: i.product.id, quantity: i.quantity, is_fraccion: i.is_fraccion })),
+      p_items: cart.map(i => ({
+        product_id: i.product.id, quantity: i.quantity, is_fraccion: i.is_fraccion,
+        con_cobertura: i.aplica_cobertura,
+      })),
       p_payment_method: payMethod,
       p_obra_social_id: obraSocialId || null,
     })
@@ -613,54 +629,70 @@ export default function POSPage() {
                   const nombreFrac = item.product.nombre_fraccion ?? 'unidad'
                   const deltaQty = item.is_fraccion ? (1 / uPorE) : 1
                   return (
-                    <div key={`${item.product.id}_${item.is_fraccion}`} className="flex items-center gap-2 py-2.5 border-b border-slate-700 last:border-0">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-sm font-medium text-white truncate">{item.product.name}</p>
-                          {item.is_fraccion
-                            ? <span className="text-xs bg-slate-700 text-slate-300 rounded px-1.5 py-0.5 flex-shrink-0">{nombreFrac}</span>
-                            : <span className="text-xs bg-emerald-900/50 text-emerald-400 rounded px-1.5 py-0.5 flex-shrink-0">caja</span>
-                          }
-                        </div>
-                        <p className="text-xs text-slate-400">{fmt(item.unit_price)} c/u</p>
-                      </div>
-
-                      {/* Controles de cantidad */}
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="w-7 h-7 p-0 border-slate-600 text-white hover:bg-slate-700"
-                          onClick={() => updateQty(item.product.id, item.is_fraccion, -deltaQty)}
-                        >
-                          <Minus className="w-3 h-3" />
-                        </Button>
-
-                        <div className="w-16 text-center text-xs font-bold text-white bg-slate-900 border border-slate-600 rounded-lg px-1 py-1">
-                          {fmtQty(item.quantity, item.is_fraccion, item.product)}
+                    <div key={`${item.product.id}_${item.is_fraccion}`} className="py-2.5 border-b border-slate-700 last:border-0">
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-medium text-white truncate">{item.product.name}</p>
+                            {item.is_fraccion
+                              ? <span className="text-xs bg-slate-700 text-slate-300 rounded px-1.5 py-0.5 flex-shrink-0">{nombreFrac}</span>
+                              : <span className="text-xs bg-emerald-900/50 text-emerald-400 rounded px-1.5 py-0.5 flex-shrink-0">caja</span>
+                            }
+                          </div>
+                          <p className="text-xs text-slate-400">{fmt(item.unit_price)} c/u</p>
                         </div>
 
+                        {/* Controles de cantidad */}
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="w-7 h-7 p-0 border-slate-600 text-white hover:bg-slate-700"
+                            onClick={() => updateQty(item.product.id, item.is_fraccion, -deltaQty)}
+                          >
+                            <Minus className="w-3 h-3" />
+                          </Button>
+
+                          <div className="w-16 text-center text-xs font-bold text-white bg-slate-900 border border-slate-600 rounded-lg px-1 py-1">
+                            {fmtQty(item.quantity, item.is_fraccion, item.product)}
+                          </div>
+
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="w-7 h-7 p-0 border-slate-600 text-white hover:bg-slate-700"
+                            onClick={() => updateQty(item.product.id, item.is_fraccion, deltaQty)}
+                          >
+                            <Plus className="w-3 h-3" />
+                          </Button>
+                        </div>
+
+                        <p className="text-sm font-bold w-20 text-right text-emerald-400 flex-shrink-0">
+                          {fmt(item.subtotal)}
+                        </p>
                         <Button
                           size="sm"
-                          variant="outline"
-                          className="w-7 h-7 p-0 border-slate-600 text-white hover:bg-slate-700"
-                          onClick={() => updateQty(item.product.id, item.is_fraccion, deltaQty)}
+                          variant="ghost"
+                          className="text-red-400 hover:text-red-300 hover:bg-red-400/10 p-1 flex-shrink-0"
+                          onClick={() => removeItem(item.product.id, item.is_fraccion)}
                         >
-                          <Plus className="w-3 h-3" />
+                          <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
 
-                      <p className="text-sm font-bold w-20 text-right text-emerald-400 flex-shrink-0">
-                        {fmt(item.subtotal)}
-                      </p>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-red-400 hover:text-red-300 hover:bg-red-400/10 p-1 flex-shrink-0"
-                        onClick={() => removeItem(item.product.id, item.is_fraccion)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                      {obraSocialId && (
+                        <label className="flex items-center gap-1.5 mt-1.5 pl-0.5 cursor-pointer select-none w-fit">
+                          <input
+                            type="checkbox"
+                            checked={item.aplica_cobertura}
+                            onChange={() => toggleCobertura(item.product.id, item.is_fraccion)}
+                            className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-900 accent-emerald-500"
+                          />
+                          <span className="text-xs text-slate-400">
+                            Con cobertura de {obraSocial?.nombre}
+                          </span>
+                        </label>
+                      )}
                     </div>
                   )
                 })
@@ -679,8 +711,8 @@ export default function POSPage() {
             <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Cobertura (opcional)</p>
               <Select value={obraSocialId || 'none'} onValueChange={v => setObraSocialId(!v || v === 'none' ? '' : v)}>
-                <SelectTrigger className="bg-slate-900 border-slate-700 text-white">
-                  <SelectValue placeholder="Sin obra social" />
+                <SelectTrigger className="bg-slate-900 border-slate-700 text-white w-full">
+                  <span>{obraSocial ? `${obraSocial.nombre} (${obraSocial.porcentaje_cobertura}%)` : 'Sin obra social'}</span>
                 </SelectTrigger>
                 <SelectContent className="bg-slate-800 border-slate-700">
                   <SelectItem value="none">Sin obra social</SelectItem>
