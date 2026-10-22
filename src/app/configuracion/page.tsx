@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Printer, Save, CheckCircle, ImagePlus, Trash2, Building2, Receipt, Monitor, KeyRound, Mail } from 'lucide-react'
+import { Printer, Save, CheckCircle, ImagePlus, Trash2, Building2, Receipt, Monitor, KeyRound, Mail, FileText } from 'lucide-react'
 import { useBranding, uploadLogo, type AppSettings } from '@/context/BrandingContext'
 import { supabase } from '@/lib/supabase'
 import {
@@ -171,6 +171,11 @@ export default function ConfiguracionPage() {
       ticket_footer: form.ticket_footer?.trim() || null,
       owner_email: form.owner_email?.trim() || null,
       notify_on_close: form.notify_on_close,
+      arca_cuit: form.arca_cuit?.trim() || null,
+      arca_punto_venta: form.arca_punto_venta,
+      arca_tipo_comprobante: form.arca_tipo_comprobante,
+      arca_ambiente: form.arca_ambiente,
+      arca_activo: form.arca_activo,
     })
     setSaving(false)
     setStatus(err ? { ok: false, msg: `No se pudo guardar: ${err}` } : { ok: true, msg: 'Guardado' })
@@ -387,6 +392,53 @@ export default function ConfiguracionPage() {
                 />
               </div>
             )}
+          </section>
+
+          {/* ── Facturación electrónica (ARCA) ── */}
+          <section className="bg-slate-800 border border-slate-700 rounded-2xl p-5 space-y-4">
+            <div>
+              <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+                <FileText className="w-4 h-4 text-emerald-400" /> Facturación electrónica (ARCA)
+              </h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Acá quedan guardados los datos para facturar electrónicamente. Por ahora es solo para
+                cargarlos — la conexión real con ARCA todavía no está activada, se activa en un paso aparte
+                una vez que esté todo probado.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs text-slate-400 mb-1.5">CUIT de la farmacia</p>
+                <input className={field} value={form.arca_cuit ?? ''} onChange={e => set('arca_cuit', e.target.value)} placeholder="30-12345678-9" />
+              </div>
+              <div>
+                <p className="text-xs text-slate-400 mb-1.5">Punto de venta (el que figura en ARCA)</p>
+                <input
+                  type="number" className={field} value={form.arca_punto_venta ?? ''}
+                  onChange={e => set('arca_punto_venta', e.target.value ? Number(e.target.value) : null)}
+                  placeholder="1"
+                />
+              </div>
+              <div>
+                <p className="text-xs text-slate-400 mb-1.5">Tipo de comprobante</p>
+                <select
+                  className={field} value={form.arca_tipo_comprobante ?? ''}
+                  onChange={e => set('arca_tipo_comprobante', (e.target.value || null) as 'B' | 'C' | null)}
+                >
+                  <option value="">Sin definir todavía</option>
+                  <option value="B">Factura B (Responsable Inscripto)</option>
+                  <option value="C">Factura C (Monotributista)</option>
+                </select>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400 mb-1.5">Ambiente</p>
+                <select className={field} value={form.arca_ambiente} onChange={e => set('arca_ambiente', e.target.value as 'homologacion' | 'produccion')}>
+                  <option value="homologacion">Homologación (prueba, no vale como factura real)</option>
+                  <option value="produccion">Producción (facturas reales)</option>
+                </select>
+              </div>
+            </div>
           </section>
 
           {/* ── Mi PIN de autorización ── */}

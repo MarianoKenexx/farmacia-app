@@ -18,6 +18,11 @@ export interface AppSettings {
   ticket_footer: string | null
   owner_email: string | null
   notify_on_close: boolean
+  arca_cuit: string | null
+  arca_punto_venta: number | null
+  arca_tipo_comprobante: 'B' | 'C' | null
+  arca_ambiente: 'homologacion' | 'produccion'
+  arca_activo: boolean
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -34,6 +39,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   ticket_footer: '¡Gracias por su compra!',
   owner_email: null,
   notify_on_close: true,
+  arca_cuit: null,
+  arca_punto_venta: null,
+  arca_tipo_comprobante: null,
+  arca_ambiente: 'homologacion',
+  arca_activo: false,
 }
 
 interface BrandingContextType {
