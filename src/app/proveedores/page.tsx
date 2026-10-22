@@ -1,8 +1,9 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { compressImage } from '@/lib/image'
 import { Proveedor, Compra, Product } from '@/types'
-import { Truck, Plus, ShoppingBag, Package2 } from 'lucide-react'
+import { Truck, Plus, ShoppingBag, Package2, Paperclip, FileImage, X } from 'lucide-react'
 
 const fmt = (n: number) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(n)
 
@@ -31,6 +32,10 @@ export default function ProveedoresPage() {
   const [buscar, setBuscar] = useState('')
   const [savingCompra, setSavingCompra] = useState(false)
   const [compraError, setCompraError] = useState('')
+  const [facturaFile, setFacturaFile] = useState<File | null>(null)
+  const [facturaPreview, setFacturaPreview] = useState<string | null>(null)
+  const [procesandoFoto, setProcesandoFoto] = useState(false)
+  const [verFacturaLoading, setVerFacturaLoading] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -77,9 +82,50 @@ export default function ProveedoresPage() {
 
   const totalCompra = lineas.reduce((s, l) => s + (Number(l.quantity) || 0) * (Number(l.costo_unitario) || 0), 0)
 
+  async function handleFacturaChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    // Achicamos y comprimimos igual que con las fotos de producto, pero
+    // con un poco más de resolución para que después se pueda leer el texto.
+    setProcesandoFoto(true)
+    try {
+      const compressed = await compressImage(file, { maxDimension: 1800, quality: 0.82 })
+      setFacturaFile(compressed)
+      setFacturaPreview(URL.createObjectURL(compressed))
+    } finally {
+      setProcesandoFoto(false)
+    }
+  }
+
+  function quitarFoto() {
+    setFacturaFile(null)
+    setFacturaPreview(null)
+  }
+
+  async function verFactura(c: Compra) {
+    if (!c.foto_factura_path) return
+    setVerFacturaLoading(c.id)
+    const { data, error } = await supabase.storage
+      .from('compra-facturas')
+      .createSignedUrl(c.foto_factura_path, 60)
+    setVerFacturaLoading(null)
+    if (error || !data?.signedUrl) { alert('No se pudo abrir la foto de la factura'); return }
+    window.open(data.signedUrl, '_blank')
+  }
+
   async function guardarCompra() {
     if (lineas.length === 0) { setCompraError('Agregá al menos un producto'); return }
     setSavingCompra(true); setCompraError('')
+
+    let fotoPath: string | null = null
+    if (facturaFile) {
+      const ext = facturaFile.name.split('.').pop()
+      const path = `${crypto.randomUUID()}.${ext}`
+      const { error: upErr } = await supabase.storage.from('compra-facturas').upload(path, facturaFile)
+      if (upErr) { setSavingCompra(false); setCompraError('No se pudo subir la foto de la factura: ' + upErr.message); return }
+      fotoPath = path
+    }
+
     const { error } = await supabase.rpc('registrar_compra', {
       p_proveedor_id: proveedorId || null,
       p_numero_factura: factura || null,
@@ -88,11 +134,12 @@ export default function ProveedoresPage() {
         quantity: Number(l.quantity),
         costo_unitario: Number(l.costo_unitario),
       })),
+      p_foto_factura_path: fotoPath,
     })
     setSavingCompra(false)
     if (error) { setCompraError(error.message); return }
     setShowNewCompra(false)
-    setProveedorId(''); setFactura(''); setLineas([])
+    setProveedorId(''); setFactura(''); setLineas([]); quitarFoto()
     load()
   }
 
@@ -174,7 +221,17 @@ export default function ProveedoresPage() {
                   <tr key={c.id} className="border-b border-slate-700/60 last:border-0">
                     <td className="px-4 py-3 text-slate-400 whitespace-nowrap">{new Date(c.created_at).toLocaleDateString('es-AR')}</td>
                     <td className="px-4 py-3 text-white">{c.proveedores?.nombre ?? '—'}</td>
-                    <td className="px-4 py-3 text-slate-400">{c.numero_factura ?? '—'}</td>
+                    <td className="px-4 py-3 text-slate-400">
+                      <div className="flex items-center gap-2">
+                        <span>{c.numero_factura ?? '—'}</span>
+                        {c.foto_factura_path && (
+                          <button onClick={() => verFactura(c)} disabled={verFacturaLoading === c.id}
+                            className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 disabled:opacity-50">
+                            <FileImage className="w-3 h-3" /> {verFacturaLoading === c.id ? 'Abriendo...' : 'Ver foto'}
+                          </button>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-slate-400">{c.compra_items?.length ?? 0}</td>
                     <td className="px-4 py-3 text-slate-400">{c.created_by ? (names[c.created_by] ?? '?') : '—'}</td>
                     <td className="px-4 py-3 text-right font-semibold text-emerald-400">{fmt(Number(c.total))}</td>
@@ -217,6 +274,23 @@ export default function ProveedoresPage() {
               <input value={factura} onChange={e => setFactura(e.target.value)} placeholder="N° factura (opcional)" className="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500" />
             </div>
 
+            <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2">
+              {facturaPreview ? (
+                <>
+                  <img src={facturaPreview} alt="Foto de la factura" className="w-10 h-10 rounded-lg object-cover border border-slate-600" />
+                  <span className="flex-1 text-sm text-slate-300">Foto de la factura cargada</span>
+                  <button type="button" onClick={quitarFoto} className="text-slate-400 hover:text-red-400"><X className="w-4 h-4" /></button>
+                </>
+              ) : (
+                <label className="flex items-center gap-2 text-sm text-slate-400 hover:text-white cursor-pointer w-full">
+                  <Paperclip className="w-4 h-4" />
+                  {procesandoFoto ? 'Optimizando...' : 'Adjuntar foto de la factura (opcional)'}
+                  <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+                    disabled={procesandoFoto} onChange={handleFacturaChange} />
+                </label>
+              )}
+            </div>
+
             <div className="relative">
               <input value={buscar} onChange={e => setBuscar(e.target.value)} placeholder="Buscar producto para agregar..." className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500" />
               {sugeridos.length > 0 && (
@@ -246,8 +320,8 @@ export default function ProveedoresPage() {
 
             {compraError && <p className="text-sm text-red-400">{compraError}</p>}
             <div className="flex justify-end gap-2 pt-1">
-              <button onClick={() => setShowNewCompra(false)} className="px-4 py-2 text-sm text-slate-300 hover:text-white rounded-xl">Cancelar</button>
-              <button onClick={guardarCompra} disabled={savingCompra || lineas.length === 0} className="px-4 py-2 text-sm font-semibold bg-sky-600 hover:bg-sky-500 text-white rounded-xl disabled:opacity-50">{savingCompra ? 'Guardando...' : 'Registrar compra'}</button>
+              <button onClick={() => { setShowNewCompra(false); quitarFoto() }} className="px-4 py-2 text-sm text-slate-300 hover:text-white rounded-xl">Cancelar</button>
+              <button onClick={guardarCompra} disabled={savingCompra || procesandoFoto || lineas.length === 0} className="px-4 py-2 text-sm font-semibold bg-sky-600 hover:bg-sky-500 text-white rounded-xl disabled:opacity-50">{savingCompra ? 'Guardando...' : 'Registrar compra'}</button>
             </div>
           </div>
         </div>

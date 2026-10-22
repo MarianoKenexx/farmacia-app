@@ -11,7 +11,7 @@ import { BookOpen, ArrowLeft } from 'lucide-react'
 // cuándo se revisó por última vez.
 // ════════════════════════════════════════════════════════════════════
 
-const ULTIMA_ACTUALIZACION = '22/10/2026 (tarde)'
+const ULTIMA_ACTUALIZACION = '22/10/2026 (noche)'
 
 const SECCIONES = [
   { id: 'roles', titulo: '1. Roles y quién ve qué' },
@@ -99,6 +99,7 @@ export default function ManualPage() {
       <Seccion id="productos" titulo="4. Productos">
         <p>Alta, baja y edición de productos: nombre, laboratorio, categoría, código de barras, precio de costo, precio de venta, IVA, stock mínimo (para alertas), unidades por envase (para fraccionar) y tipo de venta (libre / receta / receta archivada).</p>
         <p>Cualquier cambio de precio de venta o de costo queda anotado automáticamente en la Auditoría de precios (sección 12), aunque se edite el producto desde acá.</p>
+        <p>La foto del producto se achica y comprime sola apenas se la carga (antes de subirla), para no gastar de más el espacio de almacenamiento con fotos de celular pesadas.</p>
       </Seccion>
 
       <Seccion id="stock" titulo="5. Stock">
@@ -112,6 +113,7 @@ export default function ManualPage() {
 
       <Seccion id="proveedores" titulo="7. Proveedores y compras">
         <p>Se cargan los proveedores (droguerías) con sus datos de contacto, y se registran las compras que se les hacen: qué producto, cuánta cantidad y a qué costo. Al guardar una compra, el sistema suma automáticamente ese stock y actualiza el precio de costo del producto — no hace falta cargarlo dos veces. Queda un historial de compras con fecha, proveedor, factura, quién la registró y el total.</p>
+        <p>Al registrar una compra se puede adjuntar una <b>foto de la factura</b> (opcional) — queda guardada junto a esa compra y se puede volver a ver después con el botón "Ver foto" en el historial. Es una carpeta privada: solo la puede ver quien tenga permiso de Stock, no es pública como las fotos de producto.</p>
       </Seccion>
 
       <Seccion id="clientes" titulo="8. Clientes">

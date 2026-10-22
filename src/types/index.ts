@@ -138,6 +138,7 @@ export interface Compra {
   total: number
   created_by: string | null
   created_at: string
+  foto_factura_path?: string | null
   proveedores?: Proveedor
   compra_items?: CompraItem[]
 }
