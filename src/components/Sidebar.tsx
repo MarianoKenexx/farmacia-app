@@ -16,6 +16,8 @@ import {
   SlidersHorizontal,
   Bell,
   HeartPulse,
+  ScrollText,
+  Truck,
 } from 'lucide-react'
 import { useAlerts } from '@/context/AlertsContext'
 import { BrandMark } from '@/components/BrandMark'
@@ -32,6 +34,8 @@ const allNavItems = [
   { href: '/historial', label: 'Historial', icon: History, permKey: 'historial' as SectionKey },
   { href: '/reportes', label: 'Reportes', icon: BarChart2, permKey: 'reportes' as SectionKey },
   { href: '/recetas-pendientes', label: 'Recetas pendientes', icon: HeartPulse, permKey: 'reportes' as SectionKey },
+  { href: '/auditoria-precios', label: 'Auditoría de precios', icon: ScrollText, permKey: 'reportes' as SectionKey },
+  { href: '/proveedores', label: 'Proveedores y compras', icon: Truck, permKey: 'stock' as SectionKey },
   { href: '/alertas', label: 'Alertas', icon: Bell, permKey: null },
   { href: '/configuracion', label: 'Configuración', icon: SlidersHorizontal, permKey: null },
 ]

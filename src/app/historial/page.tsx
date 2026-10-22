@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext'
 import { useBranding } from '@/context/BrandingContext'
 import { inicioPeriodo, PERIODO_LABEL, type Periodo } from '@/lib/roles'
 import { METODO_LABEL } from '@/lib/ticket'
-import { ChevronDown, ChevronRight, History, Trash2, AlertTriangle, Ban, Printer } from 'lucide-react'
+import { ChevronDown, ChevronRight, History, Trash2, AlertTriangle, Ban, Printer, Undo2 } from 'lucide-react'
 
 interface Register {
   id: string
@@ -31,6 +31,7 @@ interface Sale {
   user_id: string | null
   voided_by: string | null
   void_reason: string | null
+  valor_cobertura: number | null
 }
 
 const PERIODOS: Periodo[] = ['hoy', 'semana', 'mes', 'todo']
@@ -42,6 +43,8 @@ const ok = (sales: Sale[]) => sales.filter(s => s.status === 'completed')
 const sumTotal = (sales: Sale[]) => ok(sales).reduce((s, v) => s + Number(v.total), 0)
 const sumEfectivo = (sales: Sale[]) =>
   ok(sales).filter(s => s.payment_method === 'efectivo').reduce((s, v) => s + Number(v.total), 0)
+const sumCobertura = (sales: Sale[]) =>
+  ok(sales).reduce((s, v) => s + Number(v.valor_cobertura || 0), 0)
 
 export default function HistorialPage() {
   const { profile } = useAuth()
@@ -52,6 +55,36 @@ export default function HistorialPage() {
   const [toVoid, setToVoid] = useState<Sale | null>(null)
   const [voidReason, setVoidReason] = useState('')
   const [voidError, setVoidError] = useState('')
+
+  interface SaleItemRow { id: string; product_id: string; quantity: number; returned_qty: number; unit_price: number; products: { name: string } | null }
+  const [toReturn, setToReturn] = useState<Sale | null>(null)
+  const [returnItems, setReturnItems] = useState<SaleItemRow[]>([])
+  const [returnItemId, setReturnItemId] = useState('')
+  const [returnQty, setReturnQty] = useState('')
+  const [returnReason, setReturnReason] = useState('')
+  const [returnError, setReturnError] = useState('')
+  const [returning, setReturning] = useState(false)
+
+  async function openReturn(s: Sale) {
+    setToReturn(s); setReturnError(''); setReturnReason(''); setReturnQty(''); setReturnItemId('')
+    const { data } = await supabase.from('sale_items').select('id, product_id, quantity, returned_qty, unit_price, products(name)').eq('sale_id', s.id)
+    setReturnItems(((data ?? []) as unknown as SaleItemRow[]).filter(it => it.quantity - (it.returned_qty || 0) > 0))
+  }
+
+  async function confirmReturn() {
+    if (!returnItemId) { setReturnError('Elegí un producto'); return }
+    if (!returnReason.trim()) { setReturnError('Escribí el motivo'); return }
+    const qty = Number(returnQty)
+    if (!qty || qty <= 0) { setReturnError('Cantidad inválida'); return }
+    setReturning(true)
+    const { error } = await supabase.rpc('devolver_item', { p_sale_item_id: returnItemId, p_qty: qty, p_reason: returnReason.trim() })
+    setReturning(false)
+    if (error) { setReturnError(error.message); return }
+    setToReturn(null)
+    setMsg('Devolución registrada. El stock se actualizó.')
+    setTimeout(() => setMsg(''), 4000)
+    load()
+  }
 
   const [periodo, setPeriodo] = useState<Periodo>('semana')
   const [registers, setRegisters] = useState<Register[]>([])
@@ -75,7 +108,7 @@ export default function HistorialPage() {
     if (list.length > 0) {
       const { data: sales } = await supabase
         .from('sales')
-        .select('id, register_id, total, subtotal, tax, payment_method, invoice_number, created_at, status, user_id, voided_by, void_reason')
+        .select('id, register_id, total, subtotal, tax, payment_method, invoice_number, created_at, status, user_id, voided_by, void_reason, valor_cobertura')
         .in('register_id', list.map(r => r.id))
         .order('created_at')
       for (const s of (sales ?? []) as Sale[]) {
@@ -102,7 +135,7 @@ export default function HistorialPage() {
       diferencia += r.closing_amount - (r.opening_amount + sumEfectivo(salesByReg[r.id] ?? []))
     }
     const anuladas = Object.values(salesByReg).flat().filter(s => s.status === 'voided').length
-    return { total: sumTotal(all), ventas: all.length, cajas: registers.length, porMetodo, diferencia, anuladas }
+    return { total: sumTotal(all), ventas: all.length, cajas: registers.length, porMetodo, diferencia, anuladas, cobertura: sumCobertura(all) }
   }, [registers, salesByReg])
 
   async function confirmDelete() {
@@ -222,6 +255,12 @@ export default function HistorialPage() {
               </div>
             </div>
           )}
+          {resumen.cobertura > 0 && (
+            <div className="col-span-2 lg:col-span-4 bg-amber-500/5 border border-amber-500/30 rounded-2xl p-4">
+              <p className="text-xs text-amber-400/80 mb-1">Cubierto por obras sociales en este período (no es efectivo faltante, es a cobrar aparte)</p>
+              <p className="text-lg font-bold text-amber-400">{fmt(resumen.cobertura)}</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -328,6 +367,12 @@ export default function HistorialPage() {
                           {variance !== null ? `${variance >= 0 ? '+' : ''}${fmt(variance)}` : '—'}
                         </p>
                       </div>
+                      {sumCobertura(sales) > 0 && (
+                        <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3">
+                          <p className="text-xs text-amber-400/80 mb-1">Obra social (a cobrar aparte)</p>
+                          <p className="font-semibold text-amber-400">{fmt(sumCobertura(sales))}</p>
+                        </div>
+                      )}
                     </div>
 
                     {sales.length === 0 ? (
@@ -379,15 +424,24 @@ export default function HistorialPage() {
                                 <td className="py-2 text-slate-400">{METODO_LABEL[s.payment_method] ?? s.payment_method}</td>
                                 <td className={`py-2 text-right font-semibold ${voided ? 'text-slate-500 line-through' : 'text-emerald-400'}`}>{fmt(Number(s.total))}</td>
                                 {canVoid && (
-                                  <td className="py-2 text-right">
+                                  <td className="py-2 text-right whitespace-nowrap">
                                     {!voided && (
-                                      <button
-                                        onClick={() => { setToVoid(s); setVoidReason(''); setVoidError('') }}
-                                        title="Anular venta"
-                                        className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg"
-                                      >
-                                        <Ban className="w-3.5 h-3.5" />
-                                      </button>
+                                      <>
+                                        <button
+                                          onClick={() => openReturn(s)}
+                                          title="Devolver un producto de esta venta"
+                                          className="p-1.5 text-slate-500 hover:text-amber-400 hover:bg-amber-400/10 rounded-lg"
+                                        >
+                                          <Undo2 className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={() => { setToVoid(s); setVoidReason(''); setVoidError('') }}
+                                          title="Anular venta"
+                                          className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg"
+                                        >
+                                          <Ban className="w-3.5 h-3.5" />
+                                        </button>
+                                      </>
                                     )}
                                   </td>
                                 )}
@@ -435,6 +489,59 @@ export default function HistorialPage() {
               <button onClick={confirmVoid} disabled={deleting} className="px-4 py-2 text-sm font-semibold bg-red-600 hover:bg-red-500 text-white rounded-xl disabled:opacity-50">
                 {deleting ? 'Anulando...' : 'Anular venta'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Devolver un producto */}
+      {toReturn && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-sm w-full">
+            <h2 className="text-white font-semibold mb-1">Devolver producto — venta #{toReturn.invoice_number}</h2>
+            <p className="text-sm text-slate-400 mb-4">
+              Se devuelve solo el producto elegido, se repone el stock y se descuenta de la venta lo que corresponda
+              (incluida la parte de obra social, si tenía).
+            </p>
+            {returnItems.length === 0 ? (
+              <p className="text-sm text-slate-500 mb-3">No hay productos disponibles para devolver en esta venta.</p>
+            ) : (
+              <>
+                <select
+                  value={returnItemId}
+                  onChange={e => setReturnItemId(e.target.value)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-sm mb-2"
+                >
+                  <option value="">Elegí un producto...</option>
+                  {returnItems.map(it => (
+                    <option key={it.id} value={it.id}>
+                      {it.products?.name ?? '(producto borrado)'} — quedan {it.quantity - (it.returned_qty || 0)} disponibles para devolver
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  value={returnQty}
+                  onChange={e => setReturnQty(e.target.value)}
+                  placeholder="Cantidad a devolver"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-sm placeholder-slate-500 mb-2"
+                />
+                <input
+                  value={returnReason}
+                  onChange={e => setReturnReason(e.target.value)}
+                  placeholder="Motivo (ej: el cliente trajo 1 de vuelta)"
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-sm placeholder-slate-500 mb-2"
+                />
+              </>
+            )}
+            {returnError && <p className="text-sm text-red-400 mb-2">{returnError}</p>}
+            <div className="flex justify-end gap-2 mt-3">
+              <button onClick={() => setToReturn(null)} disabled={returning} className="px-4 py-2 text-sm text-slate-300 hover:text-white rounded-xl">Cancelar</button>
+              {returnItems.length > 0 && (
+                <button onClick={confirmReturn} disabled={returning} className="px-4 py-2 text-sm font-semibold bg-amber-600 hover:bg-amber-500 text-white rounded-xl disabled:opacity-50">
+                  {returning ? 'Guardando...' : 'Registrar devolución'}
+                </button>
+              )}
             </div>
           </div>
         </div>

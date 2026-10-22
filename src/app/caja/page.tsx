@@ -91,6 +91,10 @@ export default function CajaPage() {
   const totalVentas = sales.reduce((s, v) => s + Number(v.total), 0)
   const totalNeto = sales.reduce((s, v) => s + Number(v.subtotal), 0)
   const totalIva = sales.reduce((s, v) => s + Number(v.tax), 0)
+  // Lo que cubrió la obra social no entra en efectivo/tarjeta: es plata que queda
+  // pendiente de cobrarle a la obra social, por fuera de este arqueo.
+  const totalCobertura = sales.reduce((s, v) => s + Number(v.valor_cobertura || 0), 0)
+  const totalDespachado = totalVentas + totalCobertura
 
   const porMetodo = sales.reduce((acc, v) => {
     acc[v.payment_method] = (acc[v.payment_method] || 0) + Number(v.total)
@@ -271,6 +275,34 @@ export default function CajaPage() {
             </CardContent>
           </Card>
 
+          {/* Cuánto es plata real y cuánto es a cobrarle a la obra social */}
+          {totalCobertura > 0 && (
+            <Card className="border-amber-300">
+              <CardHeader><CardTitle className="text-sm text-amber-700">Cobertura de obra social del turno</CardTitle></CardHeader>
+              <CardContent>
+                <p className="text-xs text-slate-500 mb-3">
+                  Lo que la obra social descontó no es plata que falte en la caja: es plata que todavía no cobraste,
+                  y que vas a reclamar aparte (ver “Recetas pendientes”). Por eso, si contás los billetes, el total
+                  de abajo (“Cobrado real”) es lo que tiene que dar, no el total bruto de ventas.
+                </p>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Valor de lo despachado (lista)</span>
+                    <span className="font-medium">{fmt(totalDespachado)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-500">Cubierto por obra social (a cobrar aparte)</span>
+                    <span className="font-medium text-amber-600">− {fmt(totalCobertura)}</span>
+                  </div>
+                  <div className="flex justify-between border-t pt-2 font-bold">
+                    <span>Cobrado real (efectivo + tarjetas + transferencias)</span>
+                    <span className="text-emerald-600">{fmt(totalVentas)}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Detalle de ventas */}
           <Card>
             <CardHeader><CardTitle className="text-sm">Detalle de ventas</CardTitle></CardHeader>
@@ -340,10 +372,13 @@ export default function CajaPage() {
               <p className="text-sm text-slate-500">Contá todo el efectivo que hay en la caja (incluido el cambio inicial) y escribí el total.</p>
             ) : (
             <div className="bg-slate-50 rounded-lg p-3 text-sm space-y-1">
-              <div className="flex justify-between"><span>Ventas del día:</span><span className="font-bold">{fmt(totalVentas)}</span></div>
+              <div className="flex justify-between"><span>Ventas del día (cobrado real):</span><span className="font-bold">{fmt(totalVentas)}</span></div>
+              {totalCobertura > 0 && (
+                <div className="flex justify-between text-amber-600"><span>+ Cubierto por obra social (a cobrar aparte):</span><span>{fmt(totalCobertura)}</span></div>
+              )}
               <div className="flex justify-between"><span>Monto inicial:</span><span>{fmt(register?.opening_amount || 0)}</span></div>
               <div className="flex justify-between font-bold border-t pt-1 mt-1">
-                <span>Esperado en caja:</span>
+                <span>Esperado en caja (efectivo):</span>
                 <span className="text-emerald-600">{fmt(esperadoEnCaja)}</span>
               </div>
             </div>

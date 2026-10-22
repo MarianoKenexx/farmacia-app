@@ -76,6 +76,9 @@ export interface Sale {
   obra_social_id?: string | null
   valor_cobertura?: number
   estado_reclamo?: 'pendiente' | 'presentado' | 'cobrado' | null
+  estado_reclamo_at?: string | null
+  estado_reclamo_by?: string | null
+  monto_cobrado?: number | null
   customers?: Customer
   sale_items?: SaleItem[]
   obras_sociales?: ObraSocial
@@ -88,7 +91,52 @@ export interface SaleItem {
   quantity: number
   unit_price: number
   subtotal: number
+  con_cobertura?: boolean
+  returned_qty?: number
   products?: Product
+}
+
+export interface PriceChangeLog {
+  id: string
+  product_id: string | null
+  product_name: string
+  old_sale_price: number | null
+  new_sale_price: number | null
+  old_purchase_price: number | null
+  new_purchase_price: number | null
+  changed_by: string | null
+  changed_at: string
+}
+
+export interface Proveedor {
+  id: string
+  nombre: string
+  cuit?: string | null
+  telefono?: string | null
+  contacto?: string | null
+  active: boolean
+  created_at: string
+}
+
+export interface Compra {
+  id: string
+  proveedor_id: string | null
+  numero_factura: string | null
+  total: number
+  created_by: string | null
+  created_at: string
+  proveedores?: Proveedor
+  compra_items?: CompraItem[]
+}
+
+export interface CompraItem {
+  id: string
+  compra_id: string
+  product_id: string | null
+  product_name: string
+  quantity: number
+  costo_unitario: number
+  subtotal: number
 }
 
 export interface CartItem {

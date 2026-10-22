@@ -10,6 +10,7 @@ import { TrendingUp, Trash2, AlertTriangle, Receipt, ShoppingCart, Wallet, Print
 interface SaleRow {
   id: string
   total: number
+  valor_cobertura: number | null
   payment_method: string
   created_at: string
   sale_items: {
@@ -52,7 +53,7 @@ export default function ReportesPage() {
     const desde = inicioPeriodo(periodo)
     let q = supabase
       .from('sales')
-      .select('id, total, payment_method, created_at, sale_items(product_id, quantity, subtotal, products(name, laboratory))')
+      .select('id, total, valor_cobertura, payment_method, created_at, sale_items(product_id, quantity, subtotal, products(name, laboratory))')
       .eq('status', 'completed')
       .order('created_at', { ascending: false })
     if (desde) q = q.gte('created_at', desde.toISOString())
@@ -63,12 +64,14 @@ export default function ReportesPage() {
 
   useEffect(() => { load() }, [load])
 
-  const { top, total, porMetodo } = useMemo(() => {
+  const { top, total, porMetodo, cobertura } = useMemo(() => {
     const agg: Record<string, TopProduct> = {}
     const porMetodo: Record<string, { monto: number; ventas: number }> = {}
     let total = 0
+    let cobertura = 0
     for (const s of sales) {
       total += Number(s.total)
+      cobertura += Number(s.valor_cobertura || 0)
       const m = (porMetodo[s.payment_method] ??= { monto: 0, ventas: 0 })
       m.monto += Number(s.total)
       m.ventas += 1
@@ -88,6 +91,7 @@ export default function ReportesPage() {
       top: Object.values(agg).sort((a, b) => b.qty - a.qty).slice(0, 15),
       total,
       porMetodo,
+      cobertura,
     }
   }, [sales])
 
@@ -184,6 +188,15 @@ export default function ReportesPage() {
               <p className="text-xl font-bold text-white">{fmt(sales.length ? total / sales.length : 0)}</p>
             </div>
           </div>
+
+          {cobertura > 0 && (
+            <div className="bg-amber-500/5 border border-amber-500/30 rounded-2xl p-4">
+              <p className="text-xs text-amber-400/80 mb-1">
+                Cubierto por obras sociales en este período (no es dinero cobrado, es a reclamarles aparte — ver “Recetas pendientes”)
+              </p>
+              <p className="text-lg font-bold text-amber-400">{fmt(cobertura)}</p>
+            </div>
+          )}
 
           {/* Métodos de pago */}
           <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5">
