@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { fmtStock, fmtUnidades } from '@/lib/format'
 import { supabase } from '@/lib/supabase'
+import { compressImage } from '@/lib/image'
 import { Product, Category, TIPO_VENTA_LABEL } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -43,6 +44,7 @@ export default function ProductosPage() {
   const [saving, setSaving] = useState(false)
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [compressingImage, setCompressingImage] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { fetchAll() }, [])
@@ -84,11 +86,19 @@ export default function ProductosPage() {
     setOpen(true)
   }
 
-  function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    setImageFile(file)
-    setImagePreview(URL.createObjectURL(file))
+    // Achicamos y comprimimos la foto acá mismo, antes de guardarla, para no
+    // gastar de más el espacio de almacenamiento con fotos de celular pesadas.
+    setCompressingImage(true)
+    try {
+      const compressed = await compressImage(file)
+      setImageFile(compressed)
+      setImagePreview(URL.createObjectURL(compressed))
+    } finally {
+      setCompressingImage(false)
+    }
   }
 
   function removeImage() {
@@ -334,11 +344,11 @@ export default function ProductosPage() {
                   </div>
                 )}
                 <div className="flex-1">
-                  <Button type="button" variant="outline" size="sm"
+                  <Button type="button" variant="outline" size="sm" disabled={compressingImage}
                     onClick={() => fileInputRef.current?.click()}>
-                    {imagePreview ? 'Cambiar imagen' : 'Seleccionar imagen'}
+                    {compressingImage ? 'Optimizando...' : imagePreview ? 'Cambiar imagen' : 'Seleccionar imagen'}
                   </Button>
-                  <p className="text-xs text-slate-400 mt-1">JPG, PNG o WEBP. Máx 5MB.</p>
+                  <p className="text-xs text-slate-400 mt-1">JPG, PNG o WEBP. Se achica y comprime sola al cargarla.</p>
                 </div>
                 <input
                   ref={fileInputRef}
@@ -486,7 +496,7 @@ export default function ProductosPage() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={saving || !form.name}
+            <Button onClick={handleSave} disabled={saving || compressingImage || !form.name}
               className="bg-emerald-600 hover:bg-emerald-700">
               {saving ? 'Guardando...' : 'Guardar'}
             </Button>
