@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Printer, Save, CheckCircle, ImagePlus, Trash2, Building2, Receipt, Monitor, KeyRound, Mail, FileText } from 'lucide-react'
+import { Printer, Save, CheckCircle, ImagePlus, Trash2, Building2, Receipt, Monitor, KeyRound, Mail, FileText, ShieldCheck } from 'lucide-react'
 import { useBranding, uploadLogo, type AppSettings } from '@/context/BrandingContext'
 import { supabase } from '@/lib/supabase'
 import {
@@ -103,9 +103,51 @@ export default function ConfiguracionPage() {
   const [pinStatus, setPinStatus] = useState<{ ok: boolean; msg: string } | null>(null)
   const [pinSaving, setPinSaving] = useState(false)
 
+  // Certificado digital de ARCA (nunca pasa por app_settings ni por localStorage)
+  const [arcaCargado, setArcaCargado] = useState<boolean | null>(null)
+  const [arcaActualizado, setArcaActualizado] = useState<string | null>(null)
+  const [arcaCert, setArcaCert] = useState('')
+  const [arcaKey, setArcaKey] = useState('')
+  const [arcaStatus, setArcaStatus] = useState<{ ok: boolean; msg: string } | null>(null)
+  const [arcaSaving, setArcaSaving] = useState(false)
+
   useEffect(() => { setPrinter(loadPrinterConfig()) }, [])
   useEffect(() => { if (loaded) setForm(settings) }, [loaded, settings])
   useEffect(() => { refreshPinSet() }, [])
+  useEffect(() => { refreshArcaStatus() }, [])
+
+  async function refreshArcaStatus() {
+    const { data } = await supabase.rpc('arca_credentials_status')
+    const row = Array.isArray(data) ? data[0] : data
+    setArcaCargado(Boolean(row?.cargado))
+    setArcaActualizado(row?.actualizado ?? null)
+  }
+
+  async function handleSaveArca() {
+    setArcaStatus(null)
+    if (!arcaCert.trim() || !arcaKey.trim()) {
+      setArcaStatus({ ok: false, msg: 'Pegá el certificado y la clave privada.' })
+      return
+    }
+    setArcaSaving(true)
+    const { error } = await supabase.rpc('set_arca_credentials', { p_cert: arcaCert, p_key: arcaKey })
+    setArcaSaving(false)
+    if (error) { setArcaStatus({ ok: false, msg: error.message }); return }
+    setArcaCert(''); setArcaKey('')
+    setArcaStatus({ ok: true, msg: 'Certificado guardado' })
+    refreshArcaStatus()
+    setTimeout(() => setArcaStatus(null), 2500)
+  }
+
+  async function handleClearArca() {
+    setArcaSaving(true)
+    const { error } = await supabase.rpc('clear_arca_credentials')
+    setArcaSaving(false)
+    if (error) { setArcaStatus({ ok: false, msg: error.message }); return }
+    setArcaStatus({ ok: true, msg: 'Certificado quitado' })
+    refreshArcaStatus()
+    setTimeout(() => setArcaStatus(null), 2500)
+  }
 
   async function refreshPinSet() {
     const { data } = await supabase.rpc('my_pin_set')
@@ -437,6 +479,72 @@ export default function ConfiguracionPage() {
                   <option value="homologacion">Homologación (prueba, no vale como factura real)</option>
                   <option value="produccion">Producción (facturas reales)</option>
                 </select>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-700/60 space-y-3">
+              <div>
+                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" /> Certificado digital
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Cuando tengas la Clave Fiscal y hayas generado el certificado en ARCA, pegalo acá.
+                  Queda guardado en un lugar especial que ni siquiera yo puedo leer — solo la aplicación
+                  lo usa, en el momento de facturar. Podés cargarlo vos mismo cuando lo tengas, sin que
+                  nadie tenga que tocar el código de la aplicación.
+                </p>
+              </div>
+
+              {arcaCargado !== null && (
+                arcaCargado ? (
+                  <p className="text-xs text-emerald-400 flex items-center gap-1.5">
+                    <CheckCircle className="w-3.5 h-3.5" /> Ya hay un certificado cargado
+                    {arcaActualizado ? ` (desde ${new Date(arcaActualizado).toLocaleDateString('es-AR')})` : ''}.
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-500">Todavía no se cargó ningún certificado.</p>
+                )
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-slate-400 mb-1.5">Certificado (empieza con -----BEGIN CERTIFICATE-----)</p>
+                  <textarea
+                    className={`${field} font-mono text-xs`} rows={4}
+                    value={arcaCert} onChange={e => setArcaCert(e.target.value)}
+                    placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
+                  />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-400 mb-1.5">Clave privada (empieza con -----BEGIN PRIVATE KEY-----)</p>
+                  <textarea
+                    className={`${field} font-mono text-xs`} rows={4}
+                    value={arcaKey} onChange={e => setArcaKey(e.target.value)}
+                    placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={handleSaveArca}
+                  disabled={arcaSaving || (!arcaCert.trim() && !arcaKey.trim())}
+                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold px-4 py-2 rounded-xl disabled:opacity-50"
+                >
+                  {arcaSaving ? 'Guardando...' : 'Guardar certificado'}
+                </button>
+                {arcaCargado && (
+                  <button
+                    onClick={handleClearArca}
+                    disabled={arcaSaving}
+                    className="text-slate-400 hover:text-red-400 text-sm px-2 py-2 disabled:opacity-50"
+                  >
+                    Quitar certificado
+                  </button>
+                )}
+                {arcaStatus && (
+                  <span className={`text-sm ${arcaStatus.ok ? 'text-emerald-400' : 'text-red-400'}`}>{arcaStatus.msg}</span>
+                )}
               </div>
             </div>
           </section>
