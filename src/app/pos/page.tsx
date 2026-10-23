@@ -44,6 +44,9 @@ export default function POSPage() {
   const [voidedMsg, setVoidedMsg] = useState('')
   const [obrasSociales, setObrasSociales] = useState<ObraSocial[]>([])
   const [obraSocialId, setObraSocialId] = useState<string>('')
+  // El % no es fijo por obra social (varía por producto): se elige acá,
+  // prellenado con el % sugerido que se cargó en Configuración.
+  const [porcentajeCobertura, setPorcentajeCobertura] = useState<number | null>(null)
   const [customers, setCustomers] = useState<{ id: string; name: string; phone: string | null }[]>([])
   const [customerId, setCustomerId] = useState<string>('')
   const [customerName, setCustomerName] = useState<string>('')
@@ -269,8 +272,9 @@ export default function POSPage() {
   const subtotal = cart.reduce((s, i) => s + i.subtotal, 0)
   const iva = cart.reduce((s, i) => s + i.subtotal * (i.product.iva_rate / 100) / (1 + i.product.iva_rate / 100), 0)
   const obraSocial = obrasSociales.find(o => o.id === obraSocialId) || null
+  const pctAplicado = porcentajeCobertura ?? obraSocial?.porcentaje_cobertura ?? 0
   const baseCobertura = cart.filter(i => i.aplica_cobertura).reduce((s, i) => s + i.subtotal, 0)
-  const coberturaEstimada = obraSocial ? parseFloat((baseCobertura * obraSocial.porcentaje_cobertura / 100).toFixed(2)) : 0
+  const coberturaEstimada = obraSocial ? parseFloat((baseCobertura * pctAplicado / 100).toFixed(2)) : 0
   const total = subtotal - coberturaEstimada
   const requiereReceta = cart.some(i => i.product.tipo_venta && i.product.tipo_venta !== 'libre')
 
@@ -312,6 +316,7 @@ export default function POSPage() {
       })),
       p_payment_method: payMethod,
       p_obra_social_id: obraSocialId || null,
+      p_porcentaje_cobertura: obraSocialId ? pctAplicado : null,
       p_customer_id: customerId || null,
     })
 
@@ -357,6 +362,7 @@ export default function POSPage() {
     setCart([])
     setPayMethod('efectivo')
     setObraSocialId('')
+    setPorcentajeCobertura(null)
     setCustomerId('')
     setCustomerName('')
     setCustomerSearch('')
@@ -790,19 +796,44 @@ export default function POSPage() {
               )}
             </div>
 
-            <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4">
+            <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4 space-y-2">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Cobertura (opcional)</p>
-              <Select value={obraSocialId || 'none'} onValueChange={v => setObraSocialId(!v || v === 'none' ? '' : v)}>
+              <Select
+                value={obraSocialId || 'none'}
+                onValueChange={v => {
+                  const id = !v || v === 'none' ? '' : v
+                  setObraSocialId(id)
+                  // Prellenamos con el % sugerido de esa obra social, pero se puede
+                  // cambiar al lado — el mismo producto cubre distinto según el caso.
+                  const o = obrasSociales.find(x => x.id === id)
+                  setPorcentajeCobertura(o ? o.porcentaje_cobertura : null)
+                }}
+              >
                 <SelectTrigger className="bg-slate-900 border-slate-700 text-white w-full">
-                  <span>{obraSocial ? `${obraSocial.nombre} (${obraSocial.porcentaje_cobertura}%)` : 'Sin obra social'}</span>
+                  <span>{obraSocial ? obraSocial.nombre : 'Sin obra social'}</span>
                 </SelectTrigger>
                 <SelectContent className="bg-slate-800 border-slate-700">
                   <SelectItem value="none">Sin obra social</SelectItem>
                   {obrasSociales.map(o => (
-                    <SelectItem key={o.id} value={o.id}>{o.nombre} ({o.porcentaje_cobertura}%)</SelectItem>
+                    <SelectItem key={o.id} value={o.id}>{o.nombre}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {obraSocial && (
+                <Select
+                  value={String(pctAplicado)}
+                  onValueChange={v => setPorcentajeCobertura(Number(v))}
+                >
+                  <SelectTrigger className="bg-slate-900 border-slate-700 text-white w-full">
+                    <span>{pctAplicado}% de cobertura</span>
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700">
+                    {[0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map(p => (
+                      <SelectItem key={p} value={String(p)}>{p}%{p === obraSocial.porcentaje_cobertura ? ' (sugerido)' : ''}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             <div className="bg-slate-800 rounded-xl border border-slate-700 p-4 space-y-1.5 text-sm">

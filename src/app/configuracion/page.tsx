@@ -600,8 +600,11 @@ export default function ConfiguracionPage() {
               </h2>
               <p className="text-xs text-slate-500 mt-1">
                 Las que cargues acá van a aparecer para elegir en el Punto de Venta cuando un cliente
-                tenga cobertura. El % de cobertura es lo que se le descuenta al cliente y después
-                hay que reclamarle a la obra social (se ve en “Recetas pendientes”).
+                tenga cobertura. El % de cobertura varía según el producto y la obra social (no es
+                siempre el mismo), así que en el Punto de Venta el cajero lo puede cambiar venta por
+                venta — el que cargues acá es solo el que aparece sugerido para no tener que
+                escribirlo siempre de cero. Lo que se descuenta hay que reclamarlo después a la
+                obra social (se ve en “Recetas pendientes”).
               </p>
             </div>
 
@@ -611,7 +614,7 @@ export default function ConfiguracionPage() {
                   <div key={o.id} className="flex items-center justify-between gap-3 px-3 py-2.5 bg-slate-900/40">
                     <div className="min-w-0">
                       <p className="text-sm text-white truncate">{o.nombre}</p>
-                      <p className="text-xs text-slate-500">{o.porcentaje_cobertura}% de cobertura {!o.active && '· inactiva'}</p>
+                      <p className="text-xs text-slate-500">{o.porcentaje_cobertura}% sugerido {!o.active && '· inactiva'}</p>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <button onClick={() => osEdit(o)} className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-700">
@@ -632,7 +635,7 @@ export default function ConfiguracionPage() {
                 <input className={field} value={osForm.nombre} onChange={e => setOsForm(f => ({ ...f, nombre: e.target.value }))} placeholder="Ej: PAMI, OSDE, IOMA" />
               </div>
               <div>
-                <p className="text-xs text-slate-400 mb-1.5">% de cobertura</p>
+                <p className="text-xs text-slate-400 mb-1.5">% sugerido</p>
                 <input type="number" className={field} value={osForm.porcentaje_cobertura} onChange={e => setOsForm(f => ({ ...f, porcentaje_cobertura: e.target.value }))} placeholder="40" />
               </div>
               <div className="flex gap-2">

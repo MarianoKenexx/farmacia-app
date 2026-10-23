@@ -88,6 +88,7 @@ export interface Sale {
   void_reason?: string | null
   obra_social_id?: string | null
   valor_cobertura?: number
+  porcentaje_cobertura?: number | null
   estado_reclamo?: 'pendiente' | 'presentado' | 'cobrado' | null
   estado_reclamo_at?: string | null
   estado_reclamo_by?: string | null

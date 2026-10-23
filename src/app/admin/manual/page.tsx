@@ -11,7 +11,7 @@ import { BookOpen, ArrowLeft } from 'lucide-react'
 // cuándo se revisó por última vez.
 // ════════════════════════════════════════════════════════════════════
 
-const ULTIMA_ACTUALIZACION = '22/10/2026 (tarde-noche)'
+const ULTIMA_ACTUALIZACION = '23/10/2026'
 
 const SECCIONES = [
   { id: 'roles', titulo: '1. Roles y quién ve qué' },
@@ -94,7 +94,8 @@ export default function ManualPage() {
       <Seccion id="obras-sociales" titulo="3. Ventas con obra social / cobertura">
         <p>Cada producto tiene un <b>tipo de venta</b>: venta libre (verde), bajo receta (ámbar) o receta archivada (rojo). Los bajo receta o receta archivada nunca se pueden fraccionar: siempre se vende el envase cerrado completo, aunque tenga unidades por caja cargadas.</p>
         <p>En el POS se puede elegir una obra social para la venta. Cada producto del carrito tiene un check "Con cobertura" (tildado por defecto en los que son bajo receta, destildado en venta libre) — así, en una misma venta, un producto puede tener descuento de obra social y otro no, aunque haya una sola obra social elegida.</p>
-        <p>El descuento se calcula solo sobre los productos tildados, usando el % que tenga cargado esa obra social (Configuración → Obras sociales). Lo que paga el cliente (en efectivo/tarjeta) es el total ya con el descuento aplicado — eso es lo que ingresa como "venta" en la caja. La parte que cubre la obra social queda registrada aparte como <b>pendiente de reclamo</b> (ver sección 11), porque esa plata todavía no entró, hay que reclamarla.</p>
+        <p>Al elegir la obra social aparece un segundo desplegable con el <b>%</b> a aplicar (0 a 100), prellenado con el % "sugerido" que tenga cargado esa obra social en Configuración, pero se puede cambiar ahí mismo — el mismo producto puede cubrirse distinto según la obra social, e incluso según el caso dentro de la misma obra social, así que queda a criterio de quien cobra. El descuento se calcula sobre los productos tildados "Con cobertura" usando ese %.</p>
+        <p>Lo que paga el cliente (en efectivo/tarjeta) es el total ya con el descuento aplicado — eso es lo que ingresa como "venta" en la caja. La parte que cubre la obra social queda registrada aparte como <b>pendiente de reclamo</b> (ver sección 11), porque esa plata todavía no entró, hay que reclamarla. El % que se usó queda guardado en esa venta puntual, así que si más adelante cambiás el % sugerido de la obra social en Configuración, las ventas viejas no se alteran.</p>
       </Seccion>
 
       <Seccion id="productos" titulo="4. Productos">
@@ -159,7 +160,7 @@ export default function ManualPage() {
       </Seccion>
 
       <Seccion id="configuracion" titulo="17. Configuración">
-        <p>Datos del negocio (nombre, logo), obras sociales (nombre y % de cobertura), notificaciones por mail al cerrar caja, y la configuración de facturación electrónica ARCA (cuando esté lista).</p>
+        <p>Datos del negocio (nombre, logo), obras sociales (nombre y % sugerido de cobertura — se puede ajustar en cada venta, ver sección 3), notificaciones por mail al cerrar caja, y la configuración de facturación electrónica ARCA (cuando esté lista).</p>
       </Seccion>
 
       <Seccion id="seguridad" titulo="18. Por qué está armado así (seguridad y antifraude)">
