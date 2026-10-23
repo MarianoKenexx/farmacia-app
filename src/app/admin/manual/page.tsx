@@ -11,7 +11,7 @@ import { BookOpen, ArrowLeft } from 'lucide-react'
 // cuándo se revisó por última vez.
 // ════════════════════════════════════════════════════════════════════
 
-const ULTIMA_ACTUALIZACION = '22/10/2026 (noche)'
+const ULTIMA_ACTUALIZACION = '22/10/2026 (tarde-noche)'
 
 const SECCIONES = [
   { id: 'roles', titulo: '1. Roles y quién ve qué' },
@@ -32,6 +32,7 @@ const SECCIONES = [
   { id: 'alertas', titulo: '16. Alertas' },
   { id: 'configuracion', titulo: '17. Configuración' },
   { id: 'seguridad', titulo: '18. Por qué está armado así (seguridad y antifraude)' },
+  { id: 'reiniciar', titulo: '19. Reiniciar la app' },
 ]
 
 function Seccion({ id, titulo, children }: { id: string; titulo: string; children: React.ReactNode }) {
@@ -169,6 +170,12 @@ export default function ManualPage() {
           <li>Confirmar que una obra social pagó es un paso aparte, reservado al dueño, separado de quien hace el trámite de papeleo.</li>
           <li>Varias de estas reglas están puestas directamente en la base de datos (no solo en la pantalla), para que no se puedan saltear editando algo por afuera de la app.</li>
         </ul>
+      </Seccion>
+
+      <Seccion id="reiniciar" titulo="19. Reiniciar la app (Panel Admin → Reiniciar la app)">
+        <p>Pensado para el momento en que se termina el período de prueba y se quiere arrancar a operar con todo en cero. Borra productos, categorías, obras sociales, proveedores, compras, clientes, lotes, ventas, caja, movimientos de stock, auditoría de precios, alertas, y las fotos de productos y de facturas.</p>
+        <p><b className="text-white">No</b> borra los usuarios ni la configuración del negocio (marca, ticket, ARCA) — así se puede seguir entrando a la app normalmente después.</p>
+        <p>Solo lo puede hacer un superadmin, y pide dos confirmaciones: escribir una frase exacta y poner la contraseña de superadmin. Es irreversible — no hay un "deshacer" para esto.</p>
       </Seccion>
     </div>
   )

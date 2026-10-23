@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { supabase } from '@/lib/supabase'
-import { Users, Tag, ShoppingBag, Activity, BookOpen } from 'lucide-react'
+import { Users, Tag, ShoppingBag, Activity, BookOpen, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 
 export default function AdminPage() {
@@ -84,6 +84,15 @@ export default function AdminPage() {
           <h3 className="font-semibold text-slate-400 text-lg mb-1">Reportes avanzados</h3>
           <p className="text-slate-500 text-sm">Próximamente</p>
         </div>
+
+        <Link
+          href="/admin/reiniciar"
+          className="bg-slate-800 hover:bg-slate-700 border border-red-500/20 hover:border-red-500/50 rounded-2xl p-6 transition-all group"
+        >
+          <Trash2 className="w-8 h-8 text-red-400 mb-4" />
+          <h3 className="font-semibold text-white text-lg mb-1">Reiniciar la app</h3>
+          <p className="text-slate-400 text-sm">Borrar todos los datos de prueba para arrancar en cero</p>
+        </Link>
       </div>
     </div>
   )
