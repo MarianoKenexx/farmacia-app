@@ -98,6 +98,15 @@ export interface Sale {
   obras_sociales?: ObraSocial
 }
 
+export interface CashWithdrawal {
+  id: string
+  register_id: string
+  amount: number
+  motivo: string
+  user_id?: string | null
+  created_at: string
+}
+
 export interface SaleItem {
   id: string
   sale_id: string

@@ -2,23 +2,28 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { CashRegister, Sale } from '@/types'
+import { CashRegister, Sale, CashWithdrawal } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { LockOpen, Lock, DollarSign, TrendingUp, Printer, CheckCircle } from 'lucide-react'
+import { LockOpen, Lock, DollarSign, TrendingUp, Printer, CheckCircle, Banknote } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 
 export default function CajaPage() {
   const [register, setRegister] = useState<CashRegister | null>(null)
   const [sales, setSales] = useState<Sale[]>([])
+  const [withdrawals, setWithdrawals] = useState<CashWithdrawal[]>([])
   const [openAmount, setOpenAmount] = useState('')
   const [closeAmount, setCloseAmount] = useState('')
   const [openDialog, setOpenDialog] = useState(false)
   const [closeDialog, setCloseDialog] = useState(false)
+  const [retiroDialog, setRetiroDialog] = useState(false)
+  const [retiroMonto, setRetiroMonto] = useState('')
+  const [retiroMotivo, setRetiroMotivo] = useState('')
+  const [retiroError, setRetiroError] = useState('')
   const [loading, setLoading] = useState(true)
   const [closedMsg, setClosedMsg] = useState('')
   const [actionError, setActionError] = useState('')
@@ -53,8 +58,30 @@ export default function CajaPage() {
         .eq('register_id', reg.id)
         .eq('status', 'completed')
       setSales(s || [])
+
+      const { data: w } = await supabase
+        .from('cash_withdrawals')
+        .select('*')
+        .eq('register_id', reg.id)
+        .order('created_at', { ascending: false })
+      setWithdrawals(w || [])
+    } else {
+      setWithdrawals([])
     }
     setLoading(false)
+  }
+
+  async function handleRetiro() {
+    setRetiroError('')
+    const monto = Number(retiroMonto)
+    if (!monto || monto <= 0) { setRetiroError('Ingresá un monto válido'); return }
+    if (!retiroMotivo.trim()) { setRetiroError('Indicá para qué es el retiro'); return }
+    const { error } = await supabase.rpc('retirar_de_caja', { p_monto: monto, p_motivo: retiroMotivo.trim() })
+    if (error) { setRetiroError(error.message); return }
+    setRetiroDialog(false)
+    setRetiroMonto('')
+    setRetiroMotivo('')
+    fetchRegister()
   }
 
   async function handleOpen() {
@@ -106,7 +133,8 @@ export default function CajaPage() {
     transferencia: 'Transferencia', qr: 'QR / Billetera',
   }
 
-  const esperadoEnCaja = (register?.opening_amount || 0) + (porMetodo['efectivo'] || 0)
+  const totalRetiros = withdrawals.reduce((s, w) => s + Number(w.amount), 0)
+  const esperadoEnCaja = (register?.opening_amount || 0) + (porMetodo['efectivo'] || 0) - totalRetiros
 
   if (loading) {
     return <div className="p-6 text-slate-400 animate-pulse">Cargando caja...</div>
@@ -135,9 +163,14 @@ export default function CajaPage() {
               <LockOpen className="w-4 h-4" /> Abrir caja
             </Button>
           ) : (
-            <Button onClick={() => { setActionError(''); setCloseDialog(true) }} variant="outline" className="gap-2 bg-slate-800 border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300">
-              <Lock className="w-4 h-4" /> Cerrar caja
-            </Button>
+            <>
+              <Button onClick={() => { setRetiroError(''); setRetiroDialog(true) }} variant="outline" className="gap-2 bg-slate-800 border-amber-500/40 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300">
+                <Banknote className="w-4 h-4" /> Retiro de caja
+              </Button>
+              <Button onClick={() => { setActionError(''); setCloseDialog(true) }} variant="outline" className="gap-2 bg-slate-800 border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300">
+                <Lock className="w-4 h-4" /> Cerrar caja
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -267,6 +300,12 @@ export default function CajaPage() {
                   <span className="text-slate-500">Efectivo en ventas</span>
                   <span className="font-medium">{fmt(porMetodo['efectivo'] || 0)}</span>
                 </div>
+                {totalRetiros > 0 && (
+                  <div className="flex justify-between text-amber-600">
+                    <span>Retiros de caja</span>
+                    <span>− {fmt(totalRetiros)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between border-t pt-2 font-bold">
                   <span>Esperado en caja</span>
                   <span className="text-emerald-600">{fmt(esperadoEnCaja)}</span>
@@ -299,6 +338,41 @@ export default function CajaPage() {
                     <span className="text-emerald-600">{fmt(totalVentas)}</span>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Detalle de retiros de caja */}
+          {withdrawals.length > 0 && (
+            <Card className="border-amber-300">
+              <CardHeader><CardTitle className="text-sm text-amber-700">Retiros de caja del turno</CardTitle></CardHeader>
+              <CardContent className="p-0">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-slate-50">
+                      <th className="px-4 py-2 text-left font-medium text-slate-600">Hora</th>
+                      <th className="px-4 py-2 text-left font-medium text-slate-600">Motivo</th>
+                      <th className="px-4 py-2 text-right font-medium text-slate-600">Monto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {withdrawals.map(w => (
+                      <tr key={w.id} className="border-b hover:bg-slate-50">
+                        <td className="px-4 py-2 text-slate-500">
+                          {new Date(w.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                        <td className="px-4 py-2">{w.motivo}</td>
+                        <td className="px-4 py-2 text-right font-medium text-amber-600">− {fmt(Number(w.amount))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t bg-slate-50 font-bold">
+                      <td className="px-4 py-2" colSpan={2}>TOTAL RETIRADO</td>
+                      <td className="px-4 py-2 text-right text-amber-700">− {fmt(totalRetiros)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
               </CardContent>
             </Card>
           )}
@@ -377,6 +451,9 @@ export default function CajaPage() {
                 <div className="flex justify-between text-amber-600"><span>+ Cubierto por obra social (a cobrar aparte):</span><span>{fmt(totalCobertura)}</span></div>
               )}
               <div className="flex justify-between"><span>Monto inicial:</span><span>{fmt(register?.opening_amount || 0)}</span></div>
+              {totalRetiros > 0 && (
+                <div className="flex justify-between text-amber-600"><span>− Retiros de caja:</span><span>{fmt(totalRetiros)}</span></div>
+              )}
               <div className="flex justify-between font-bold border-t pt-1 mt-1">
                 <span>Esperado en caja (efectivo):</span>
                 <span className="text-emerald-600">{fmt(esperadoEnCaja)}</span>
@@ -393,6 +470,32 @@ export default function CajaPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setCloseDialog(false)}>Cancelar</Button>
             <Button onClick={handleClose} disabled={closeAmount === ''} className="bg-red-600 hover:bg-red-700">Cerrar caja</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* Dialog retiro de caja */}
+      <Dialog open={retiroDialog} onOpenChange={setRetiroDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Retiro de caja</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-sm text-slate-500">
+              Para sacar efectivo de la caja y pagar algo (luz, agua, un flete, etc.). Queda registrado y se descuenta del arqueo.
+            </p>
+            <div>
+              <Label>Monto a retirar</Label>
+              <Input type="number" placeholder="0.00" value={retiroMonto}
+                onChange={e => setRetiroMonto(e.target.value)} />
+            </div>
+            <div>
+              <Label>Motivo</Label>
+              <Input placeholder="Ej: Pago de luz" value={retiroMotivo}
+                onChange={e => setRetiroMotivo(e.target.value)} />
+            </div>
+          </div>
+          {retiroError && <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{retiroError}</p>}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRetiroDialog(false)}>Cancelar</Button>
+            <Button onClick={handleRetiro} className="bg-amber-600 hover:bg-amber-700">Retirar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

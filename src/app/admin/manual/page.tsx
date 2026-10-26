@@ -11,7 +11,7 @@ import { BookOpen, ArrowLeft } from 'lucide-react'
 // cuándo se revisó por última vez.
 // ════════════════════════════════════════════════════════════════════
 
-const ULTIMA_ACTUALIZACION = '23/10/2026'
+const ULTIMA_ACTUALIZACION = '26/10/2026'
 
 const SECCIONES = [
   { id: 'roles', titulo: '1. Roles y quién ve qué' },
@@ -131,6 +131,7 @@ export default function ManualPage() {
         <p>Al empezar el turno se <b>abre la caja</b> con el monto inicial en efectivo. Durante el turno, cada venta en efectivo suma al "esperado en caja". Al cerrar, se cuenta la plata física y se carga ese monto — ahí se compara contra lo esperado.</p>
         <p>Los cajeros ven una versión "a ciegas": pueden abrir y cerrar caja, pero no ven cuánto "debería" dar, para que no puedan ajustar el conteo. Esa comparación (diferencia) solo la ve un administrador o superadmin.</p>
         <p>Si en el turno hubo ventas con cobertura de obra social, aparece un cuadro aparte aclarando que esa plata no es un faltante: es dinero que todavía no se cobró y se va a reclamar por separado (ver sección 11). El número que tiene que coincidir con el efectivo contado es "Cobrado real", no el total bruto de ventas.</p>
+        <p>Con la caja abierta hay un botón <b>"Retiro de caja"</b>: sirve para sacar efectivo y pagar algo (luz, agua, un flete, etc.) sin que esa plata desaparezca sin dejar rastro. Pide el monto y el motivo, queda registrado con hora y quién lo hizo, genera una alerta para el admin, y se descuenta automáticamente del "esperado en caja" al hacer el arqueo o el cierre — así el cierre sigue dando bien aunque haya salido plata de la caja por un motivo legítimo.</p>
       </Seccion>
 
       <Seccion id="historial" titulo="11. Historial de cajas">
