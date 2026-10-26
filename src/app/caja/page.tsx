@@ -54,7 +54,7 @@ export default function CajaPage() {
     if (reg) {
       const { data: s } = await supabase
         .from('sales')
-        .select('*')
+        .select('*, customers(name)')
         .eq('register_id', reg.id)
         .eq('status', 'completed')
       setSales(s || [])
@@ -115,13 +115,21 @@ export default function CajaPage() {
   const fmt = (n: number) =>
     new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(n)
 
-  const totalVentas = sales.reduce((s, v) => s + Number(v.total), 0)
-  const totalNeto = sales.reduce((s, v) => s + Number(v.subtotal), 0)
-  const totalIva = sales.reduce((s, v) => s + Number(v.tax), 0)
+  // Un fiado no es plata que entró: es una promesa de pago. Lo sacamos de
+  // "cobrado real" (igual que ya se hace con la cobertura de obra social)
+  // y lo mostramos aparte para poder discriminarlo más tarde.
+  const fiados = sales.filter(s => s.payment_method === 'fiado')
+  const totalFiado = fiados.reduce((s, v) => s + Number(v.total), 0)
+  const salesCobradas = sales.filter(s => s.payment_method !== 'fiado')
+  const totalVentasTodas = sales.reduce((s, v) => s + Number(v.total), 0)
+
+  const totalVentas = salesCobradas.reduce((s, v) => s + Number(v.total), 0)
+  const totalNeto = salesCobradas.reduce((s, v) => s + Number(v.subtotal), 0)
+  const totalIva = salesCobradas.reduce((s, v) => s + Number(v.tax), 0)
   // Lo que cubrió la obra social no entra en efectivo/tarjeta: es plata que queda
   // pendiente de cobrarle a la obra social, por fuera de este arqueo.
   const totalCobertura = sales.reduce((s, v) => s + Number(v.valor_cobertura || 0), 0)
-  const totalDespachado = totalVentas + totalCobertura
+  const totalDespachado = totalVentas + totalCobertura + totalFiado
 
   const porMetodo = sales.reduce((acc, v) => {
     acc[v.payment_method] = (acc[v.payment_method] || 0) + Number(v.total)
@@ -314,25 +322,34 @@ export default function CajaPage() {
             </CardContent>
           </Card>
 
-          {/* Cuánto es plata real y cuánto es a cobrarle a la obra social */}
-          {totalCobertura > 0 && (
+          {/* Cuánto es plata real y cuánto es a cobrar después (obra social o fiado) */}
+          {(totalCobertura > 0 || totalFiado > 0) && (
             <Card className="border-amber-300">
-              <CardHeader><CardTitle className="text-sm text-amber-700">Cobertura de obra social del turno</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-sm text-amber-700">Plata pendiente de cobrar del turno</CardTitle></CardHeader>
               <CardContent>
                 <p className="text-xs text-slate-500 mb-3">
-                  Lo que la obra social descontó no es plata que falte en la caja: es plata que todavía no cobraste,
-                  y que vas a reclamar aparte (ver “Recetas pendientes”). Por eso, si contás los billetes, el total
-                  de abajo (“Cobrado real”) es lo que tiene que dar, no el total bruto de ventas.
+                  Ni la cobertura de obra social ni lo fiado son plata que falte en la caja: todavía no se cobraron
+                  (la cobertura se reclama aparte — ver “Recetas pendientes” — y el fiado se le cobra al cliente más
+                  adelante). Por eso, si contás los billetes, el total de abajo (“Cobrado real”) es lo que tiene que
+                  dar, no el total bruto de ventas.
                 </p>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-slate-500">Valor de lo despachado (lista)</span>
                     <span className="font-medium">{fmt(totalDespachado)}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Cubierto por obra social (a cobrar aparte)</span>
-                    <span className="font-medium text-amber-600">− {fmt(totalCobertura)}</span>
-                  </div>
+                  {totalCobertura > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Cubierto por obra social (a cobrar aparte)</span>
+                      <span className="font-medium text-amber-600">− {fmt(totalCobertura)}</span>
+                    </div>
+                  )}
+                  {totalFiado > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Fiado (a cobrarle al cliente después)</span>
+                      <span className="font-medium text-amber-600">− {fmt(totalFiado)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between border-t pt-2 font-bold">
                     <span>Cobrado real (efectivo + tarjetas + transferencias)</span>
                     <span className="text-emerald-600">{fmt(totalVentas)}</span>
@@ -377,6 +394,43 @@ export default function CajaPage() {
             </Card>
           )}
 
+          {/* Detalle de fiados: para poder discriminarlos y después cobrarle a cada cliente */}
+          {fiados.length > 0 && (
+            <Card className="border-amber-300">
+              <CardHeader><CardTitle className="text-sm text-amber-700">Fiados del turno</CardTitle></CardHeader>
+              <CardContent className="p-0">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-slate-50">
+                      <th className="px-4 py-2 text-left font-medium text-slate-600">Factura</th>
+                      <th className="px-4 py-2 text-left font-medium text-slate-600">Hora</th>
+                      <th className="px-4 py-2 text-left font-medium text-slate-600">Cliente</th>
+                      <th className="px-4 py-2 text-right font-medium text-slate-600">Monto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {fiados.map(s => (
+                      <tr key={s.id} className="border-b hover:bg-slate-50">
+                        <td className="px-4 py-2">#{s.invoice_number}</td>
+                        <td className="px-4 py-2 text-slate-500">
+                          {new Date(s.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                        <td className="px-4 py-2">{s.customers?.name || '—'}</td>
+                        <td className="px-4 py-2 text-right font-medium text-amber-600">{fmt(Number(s.total))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t bg-slate-50 font-bold">
+                      <td className="px-4 py-2" colSpan={3}>TOTAL FIADO</td>
+                      <td className="px-4 py-2 text-right text-amber-700">{fmt(totalFiado)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Detalle de ventas */}
           <Card>
             <CardHeader><CardTitle className="text-sm">Detalle de ventas</CardTitle></CardHeader>
@@ -408,7 +462,7 @@ export default function CajaPage() {
                   <tfoot>
                     <tr className="border-t bg-slate-50 font-bold">
                       <td className="px-4 py-2" colSpan={3}>TOTAL</td>
-                      <td className="px-4 py-2 text-right text-emerald-700">{fmt(totalVentas)}</td>
+                      <td className="px-4 py-2 text-right text-emerald-700">{fmt(totalVentasTodas)}</td>
                     </tr>
                   </tfoot>
                 </table>
@@ -449,6 +503,9 @@ export default function CajaPage() {
               <div className="flex justify-between"><span>Ventas del día (cobrado real):</span><span className="font-bold">{fmt(totalVentas)}</span></div>
               {totalCobertura > 0 && (
                 <div className="flex justify-between text-amber-600"><span>+ Cubierto por obra social (a cobrar aparte):</span><span>{fmt(totalCobertura)}</span></div>
+              )}
+              {totalFiado > 0 && (
+                <div className="flex justify-between text-amber-600"><span>+ Fiado (a cobrarle al cliente después):</span><span>{fmt(totalFiado)}</span></div>
               )}
               <div className="flex justify-between"><span>Monto inicial:</span><span>{fmt(register?.opening_amount || 0)}</span></div>
               {totalRetiros > 0 && (
