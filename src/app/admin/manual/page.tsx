@@ -11,7 +11,7 @@ import { BookOpen, ArrowLeft } from 'lucide-react'
 // cuándo se revisó por última vez.
 // ════════════════════════════════════════════════════════════════════
 
-const ULTIMA_ACTUALIZACION = '26/10/2026'
+const ULTIMA_ACTUALIZACION = '26/10/2026 (tarde)'
 
 const SECCIONES = [
   { id: 'roles', titulo: '1. Roles y quién ve qué' },
@@ -86,7 +86,8 @@ export default function ManualPage() {
       </Seccion>
 
       <Seccion id="pos" titulo="2. Punto de Venta (POS)">
-        <p>Es la pantalla donde se cobra. Se busca el producto por nombre o se escanea el código de barras, se arma el carrito y se cobra con el método de pago correspondiente (efectivo, débito, crédito, transferencia, QR).</p>
+        <p>Es la pantalla donde se cobra. Se busca el producto por nombre o se escanea el código de barras, se arma el carrito y se cobra con el método de pago correspondiente (efectivo, débito, crédito, transferencia, QR, fiado).</p>
+        <p>El método <b>"Fiado"</b> solo aparece en el desplegable de pago cuando ya se eligió un cliente arriba — no se puede fiar una venta anónima. Esa venta no entra como efectivo real: en Caja, "Por método de pago" la muestra aparte y no suma al "esperado en caja" (ver sección 10), porque todavía no se cobró.</p>
         <p>Si un producto tiene <b>unidades por envase</b> cargadas (por ejemplo, una caja de 30 comprimidos), se puede vender "fraccionado" (por unidad suelta) además de la caja cerrada — salvo que sea bajo receta (ver más abajo).</p>
         <p>Si se escanea un código que no existe en el sistema, se abre un formulario rápido para darlo de alta en el momento (nombre, laboratorio, precio, stock inicial) y seguir con la venta.</p>
       </Seccion>

@@ -70,6 +70,7 @@ export const METODO_LABEL: Record<string, string> = {
   credito: 'Crédito',
   transferencia: 'Transferencia',
   qr: 'QR / Billetera virtual',
+  fiado: 'Fiado',
 }
 
 const money = (n: number) =>

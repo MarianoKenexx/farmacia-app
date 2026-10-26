@@ -17,7 +17,7 @@ const money = (n: number) =>
 
 const METODO_LABEL: Record<string, string> = {
   efectivo: 'Efectivo', debito: 'Débito', credito: 'Crédito',
-  transferencia: 'Transferencia', qr: 'QR / Billetera virtual',
+  transferencia: 'Transferencia', qr: 'QR / Billetera virtual', fiado: 'Fiado',
 }
 
 // Se llama justo después de cerrar una caja (desde /caja). No bloquea el

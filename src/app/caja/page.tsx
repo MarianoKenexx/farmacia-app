@@ -130,7 +130,7 @@ export default function CajaPage() {
 
   const metodoLabel: Record<string, string> = {
     efectivo: 'Efectivo', debito: 'Débito', credito: 'Crédito',
-    transferencia: 'Transferencia', qr: 'QR / Billetera',
+    transferencia: 'Transferencia', qr: 'QR / Billetera', fiado: 'Fiado',
   }
 
   const totalRetiros = withdrawals.reduce((s, w) => s + Number(w.amount), 0)

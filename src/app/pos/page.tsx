@@ -756,7 +756,7 @@ export default function POSPage() {
               {customerId ? (
                 <div className="flex items-center justify-between bg-slate-900 rounded-xl px-3 py-2">
                   <span className="text-sm text-white">{customerName}</span>
-                  <button onClick={() => { setCustomerId(''); setCustomerName('') }} className="text-xs text-slate-400 hover:text-slate-200">quitar</button>
+                  <button onClick={() => { setCustomerId(''); setCustomerName(''); setPayMethod(m => m === 'fiado' ? 'efectivo' : m) }} className="text-xs text-slate-400 hover:text-slate-200">quitar</button>
                 </div>
               ) : (
                 <>
@@ -792,7 +792,7 @@ export default function POSPage() {
                 </>
               )}
               {customerId && (
-                <p className="text-xs text-slate-500 mt-1.5">Así queda asociada la venta para recordatorios de recompra.</p>
+                <p className="text-xs text-slate-500 mt-1.5">Así queda asociada la venta para recordatorios de recompra y, si hace falta, para fiarla.</p>
               )}
             </div>
 
@@ -859,7 +859,15 @@ export default function POSPage() {
               )}
             </div>
 
-            <Select value={payMethod} onValueChange={v => setPayMethod(v ?? payMethod)}>
+            <Select
+              value={payMethod}
+              onValueChange={v => {
+                const next = v ?? payMethod
+                // Fiado solo es válido con un cliente elegido: si lo sacan
+                // después de haberlo seleccionado, volvemos a efectivo.
+                setPayMethod(next === 'fiado' && !customerId ? 'efectivo' : next)
+              }}
+            >
               <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
                 <SelectValue />
               </SelectTrigger>
@@ -869,8 +877,14 @@ export default function POSPage() {
                 <SelectItem value="credito">Crédito</SelectItem>
                 <SelectItem value="transferencia">Transferencia</SelectItem>
                 <SelectItem value="qr">QR / Billetera virtual</SelectItem>
+                {customerId && <SelectItem value="fiado">Fiado</SelectItem>}
               </SelectContent>
             </Select>
+            {payMethod === 'fiado' && (
+              <p className="text-xs text-amber-400 -mt-1">
+                Queda a cuenta de {customerName}. No suma al efectivo de la caja.
+              </p>
+            )}
 
             {saleError && (
               <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-2">{saleError}</p>
