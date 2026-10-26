@@ -9,6 +9,7 @@ const ROUTE_PERMISSIONS: Record<string, string> = {
   '/stock': 'stock',
   '/clientes': 'clientes',
   '/caja': 'caja',
+  '/cobros': 'caja',
   '/historial': 'historial',
   '/reportes': 'reportes',
 }
