@@ -9,8 +9,10 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { LockOpen, Lock, DollarSign, TrendingUp, Printer, CheckCircle, Banknote } from 'lucide-react'
+import { LockOpen, Lock, DollarSign, TrendingUp, Printer, CheckCircle, Banknote, Receipt } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
+import { useBranding } from '@/context/BrandingContext'
+import { loadPrinterConfig, printFiadosTicket } from '@/lib/ticket'
 
 export default function CajaPage() {
   const [register, setRegister] = useState<CashRegister | null>(null)
@@ -24,10 +26,12 @@ export default function CajaPage() {
   const [retiroMonto, setRetiroMonto] = useState('')
   const [retiroMotivo, setRetiroMotivo] = useState('')
   const [retiroError, setRetiroError] = useState('')
+  const [printingFiados, setPrintingFiados] = useState(false)
   const [loading, setLoading] = useState(true)
   const [closedMsg, setClosedMsg] = useState('')
   const [actionError, setActionError] = useState('')
   const [openedByName, setOpenedByName] = useState<string | null>(null)
+  const { settings: brand } = useBranding()
   const { profile } = useAuth()
   // Cierre "a ciegas": el cajero no ve cuánto debería haber, solo cuenta y carga el monto.
   const blind = profile?.role === 'cajero'
@@ -82,6 +86,44 @@ export default function CajaPage() {
     setRetiroMonto('')
     setRetiroMotivo('')
     fetchRegister()
+  }
+
+  // Trae TODOS los fiados del día (de cualquier caja que se haya abierto/cerrado
+  // hoy, no solo la que está abierta ahora), para poder imprimirlos al final del día.
+  async function handlePrintFiados() {
+    setPrintingFiados(true)
+    setActionError('')
+    try {
+      const inicio = new Date()
+      inicio.setHours(0, 0, 0, 0)
+      const fin = new Date(inicio)
+      fin.setDate(fin.getDate() + 1)
+
+      const { data, error } = await supabase
+        .from('sales')
+        .select('invoice_number, created_at, total, customers(name)')
+        .eq('status', 'completed')
+        .eq('payment_method', 'fiado')
+        .gte('created_at', inicio.toISOString())
+        .lt('created_at', fin.toISOString())
+        .order('created_at', { ascending: true })
+
+      if (error) { setActionError(error.message); return }
+
+      const rows = (data || []).map(r => {
+        const cust = Array.isArray(r.customers) ? r.customers[0] : r.customers
+        return {
+          invoiceNumber: r.invoice_number,
+          date: new Date(r.created_at),
+          cliente: cust?.name || 'Cliente sin nombre',
+          monto: Number(r.total),
+        }
+      })
+
+      printFiadosTicket(rows, inicio, brand, loadPrinterConfig())
+    } finally {
+      setPrintingFiados(false)
+    }
   }
 
   async function handleOpen() {
@@ -157,6 +199,16 @@ export default function CajaPage() {
           <p className="text-sm text-slate-400">Control de apertura, cierre y arqueo</p>
         </div>
         <div className="flex items-center gap-2">
+          {!blind && (
+            <Button
+              variant="outline"
+              className="gap-2 bg-slate-800 border-slate-700 text-white hover:bg-slate-700 hover:text-white"
+              onClick={handlePrintFiados}
+              disabled={printingFiados}
+            >
+              <Receipt className="w-4 h-4" /> {printingFiados ? 'Imprimiendo...' : 'Imprimir fiados del día'}
+            </Button>
+          )}
           {register && !blind && (
             <Button
               variant="outline"

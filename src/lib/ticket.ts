@@ -147,6 +147,99 @@ export function buildTicketHtml(data: TicketData, printer: PrinterConfig, brand:
   </style></head><body>${Array(copies).fill(one).join('')}</body></html>`
 }
 
+export interface FiadoTicketRow {
+  invoiceNumber: number | string
+  date: Date
+  cliente: string
+  monto: number
+}
+
+// Ticket-resumen de todos los fiados del día, para que al cerrar quede un
+// papel con la lista de a quién se le fió y cuánto (y poder reclamarlo).
+export function buildFiadosTicketHtml(rows: FiadoTicketRow[], fecha: Date, brand: AppSettings, printer: PrinterConfig) {
+  const w = printer.width === '58' ? 58 : 80
+  const fontSize = w === 58 ? 10 : 12
+  const line = '<div class="sep"></div>'
+  const name = brand.ticket_name?.trim() || brand.business_name || 'Farmacia'
+  const logo = ticketLogoUrl(brand)
+  const total = rows.reduce((s, r) => s + r.monto, 0)
+
+  const header = [
+    logo && `<div class="center"><img class="logo" src="${esc(logo)}" alt=""></div>`,
+    `<div class="center big">${esc(name)}</div>`,
+    brand.ticket_address && `<div class="center">${esc(brand.ticket_address)}</div>`,
+  ].filter(Boolean).join('')
+
+  const items = rows.length === 0
+    ? '<div class="center small">Sin fiados en el día</div>'
+    : rows.map(r => `
+      <div class="item">${esc(r.cliente)} <span style="font-weight:400">· #${esc(String(r.invoiceNumber))}</span></div>
+      <div class="row"><span>${r.date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</span><span>${money(r.monto)}</span></div>
+    `).join('')
+
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Fiados del día</title>
+  <style>
+    @page { size: ${w}mm auto; margin: 0; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #fff; color: #000; }
+    body { width: ${w}mm; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: ${fontSize}px; line-height: 1.3; }
+    .ticket { padding: 3mm ${w === 58 ? 2 : 4}mm 6mm; }
+    .center { text-align: center; }
+    .logo { display: block; margin: 0 auto 2mm; max-width: 70%; max-height: 22mm; object-fit: contain; filter: grayscale(1) contrast(1.2); }
+    .big { font-size: ${fontSize + 4}px; font-weight: 700; }
+    .bold { font-weight: 700; }
+    .small { font-size: ${fontSize - 2}px; margin-top: 2mm; }
+    .row { display: flex; justify-content: space-between; gap: 2mm; }
+    .item { font-weight: 600; margin-top: 1mm; }
+    .sep { border-top: 1px dashed #000; margin: 2mm 0; }
+  </style></head><body>
+    <div class="ticket">
+      ${header}
+      ${line}
+      <div class="center big">FIADOS DEL DÍA</div>
+      <div class="row"><span>${fecha.toLocaleDateString('es-AR')}</span><span>${rows.length} fiado${rows.length === 1 ? '' : 's'}</span></div>
+      ${line}
+      ${items}
+      ${line}
+      <div class="row big"><span>TOTAL</span><span>${money(total)}</span></div>
+      ${line}
+      <div class="center small">Comprobante interno — no válido como factura</div>
+    </div>
+  </body></html>`
+}
+
+export function printFiadosTicket(rows: FiadoTicketRow[], fecha: Date, brand: AppSettings, printer: PrinterConfig = loadPrinterConfig()) {
+  if (typeof window === 'undefined') return
+  const iframe = document.createElement('iframe')
+  iframe.setAttribute('aria-hidden', 'true')
+  Object.assign(iframe.style, { position: 'fixed', right: '0', bottom: '0', width: '0', height: '0', border: '0' })
+  document.body.appendChild(iframe)
+
+  const doc = iframe.contentDocument
+  if (!doc) { iframe.remove(); return }
+  doc.open()
+  doc.write(buildFiadosTicketHtml(rows, fecha, brand, printer))
+  doc.close()
+
+  const win = iframe.contentWindow
+  const imgs = Array.from(doc.images)
+  const ready = Promise.race([
+    Promise.all(imgs.map(img => img.complete ? Promise.resolve() : new Promise<void>(r => { img.onload = () => r(); img.onerror = () => r() }))),
+    new Promise<void>(r => setTimeout(r, 3000)),
+  ])
+
+  ready.then(() => {
+    setTimeout(() => {
+      try {
+        win?.focus()
+        win?.print()
+      } finally {
+        setTimeout(() => iframe.remove(), 1000)
+      }
+    }, 100)
+  })
+}
+
 // Imprime usando un marco oculto, sin abrir otra ventana.
 // Espera a que cargue el logo (máximo 3 segundos) para que salga en el papel.
 export function printTicket(data: TicketData, brand: AppSettings, printer: PrinterConfig = loadPrinterConfig()) {
