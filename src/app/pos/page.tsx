@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search, Trash2, ShoppingCart, CheckCircle, Plus, Minus, Barcode, Package, Pill, Printer, Lock, Ban, X, HeartPulse, PackagePlus } from 'lucide-react'
 import Link from 'next/link'
 import { useAuth } from '@/context/AuthContext'
-import { loadPrinterConfig, printComandaTicket, type ComandaTicketData } from '@/lib/ticket'
+import { loadPrinterConfig, printTicket, type TicketData } from '@/lib/ticket'
 import { useBranding } from '@/context/BrandingContext'
 
 // CartItem extended to track unit price and mode
@@ -32,7 +32,8 @@ export default function POSPage() {
   const [barcodeMsg, setBarcodeMsg] = useState('')
   const [registerId, setRegisterId] = useState<string | null | undefined>(undefined) // undefined = cargando
   const [saleError, setSaleError] = useState('')
-  const [lastTicket, setLastTicket] = useState<ComandaTicketData | null>(null)
+  const [payMethod, setPayMethod] = useState('efectivo')
+  const [lastTicket, setLastTicket] = useState<TicketData | null>(null)
   const [lastSaleId, setLastSaleId] = useState<string | null>(null)
   const [lastSaleAt, setLastSaleAt] = useState<number | null>(null)
   const [voidOpen, setVoidOpen] = useState(false)
@@ -293,70 +294,67 @@ export default function POSPage() {
     }
   }
 
-  async function handleDespachar() {
+  async function handleSale() {
     if (cart.length === 0 || processing) return
     setProcessing(true)
     setSaleError('')
 
-    // Sin caja abierta no se puede despachar: así toda comanda queda dentro de un arqueo
+    // Sin caja abierta no se puede cobrar
     const regId = await fetchRegister()
     if (!regId) {
-      setSaleError('La caja está cerrada. Abrila antes de despachar.')
+      setSaleError('La caja está cerrada. Abrila antes de cobrar.')
       setProcessing(false)
       return
     }
 
-    // La comanda se registra en la base "todo junto": venta pendiente, líneas,
-    // stock y movimientos. El stock baja acá mismo, al despachar — todavía
-    // no se eligió método de pago, eso lo hace caja al cobrar.
-    const { data: result, error } = await supabase.rpc('despachar_comanda', {
+    const { data: result, error } = await supabase.rpc('create_sale', {
       p_items: cart.map(i => ({
         product_id: i.product.id, quantity: i.quantity, is_fraccion: i.is_fraccion,
         con_cobertura: i.aplica_cobertura,
       })),
+      p_payment_method: payMethod,
+      p_customer_id: customerId || null,
       p_obra_social_id: obraSocialId || null,
       p_porcentaje_cobertura: obraSocialId ? pctAplicado : null,
-      p_customer_id: customerId || null,
     })
 
     if (error || !result) {
-      setSaleError(error?.message || 'No se pudo registrar la comanda. Revisá la conexión e intentá de nuevo.')
+      setSaleError(error?.message || 'No se pudo registrar la venta. Revisá la conexión e intentá de nuevo.')
       setProcessing(false)
       if (error?.message?.includes('caja')) fetchRegister()
       return
     }
 
-    const comanda = result as {
+    const venta = result as {
       id: string; invoice_number: number; created_at: string
       total: number; tax: number; neto: number
       lines: { product_id: string; unit_price: number; subtotal: number }[]
       valor_cobertura: number; valor_lista: number
     }
 
-    // Comandera: se la lleva el cliente a caja para pagar
-    const ticket: ComandaTicketData = {
-      invoiceNumber: comanda.invoice_number,
-      date: new Date(comanda.created_at ?? Date.now()),
+    const ticket: TicketData = {
+      invoiceNumber: venta.invoice_number,
+      date: new Date(venta.created_at ?? Date.now()),
       items: cart.map((i, idx) => ({
         name: i.product.name,
         qtyLabel: fmtQty(i.quantity, i.is_fraccion, i.product),
-        unitPrice: Number(comanda.lines[idx]?.unit_price ?? i.unit_price),
-        subtotal: Number(comanda.lines[idx]?.subtotal ?? i.subtotal),
+        unitPrice: Number(venta.lines[idx]?.unit_price ?? i.unit_price),
+        subtotal: Number(venta.lines[idx]?.subtotal ?? i.subtotal),
       })),
-      neto: Number(comanda.neto),
-      iva: Number(comanda.tax),
-      total: Number(comanda.total),
-      dispatcher: profile?.name,
-      customerName: customerName || undefined,
+      neto: Number(venta.neto),
+      iva: Number(venta.tax),
+      total: Number(venta.total),
+      paymentMethod: payMethod,
+      cashier: profile?.name,
       obraSocialNombre: obraSocial?.nombre,
-      valorCobertura: Number(comanda.valor_cobertura) || 0,
+      valorCobertura: Number(venta.valor_cobertura) || 0,
     }
     setLastTicket(ticket)
-    setLastSaleId(comanda.id)
+    setLastSaleId(venta.id)
     setLastSaleAt(Date.now())
     setVoidedMsg('')
     const printer = loadPrinterConfig()
-    if (printer.autoPrint) printComandaTicket(ticket, brand, printer)
+    if (printer.autoPrint) printTicket(ticket, brand, printer)
 
     setCart([])
     setObraSocialId('')
@@ -365,6 +363,7 @@ export default function POSPage() {
     setCustomerName('')
     setCustomerSearch('')
     setCustomers([])
+    setPayMethod('efectivo')
     setProcessing(false)
     setSuccess(true)
     fetchProducts()
@@ -374,7 +373,7 @@ export default function POSPage() {
     }, 2000)
   }
 
-  // El farmacéutico solo puede pedir la anulación hasta 15 minutos después de despachar
+  // El farmacéutico solo puede pedir la anulación hasta 15 minutos después de cobrar
   const VOID_WINDOW_MS = 15 * 60 * 1000
   const canAskVoid = lastSaleId && lastSaleAt && (Date.now() - lastSaleAt) < VOID_WINDOW_MS
 
@@ -384,7 +383,7 @@ export default function POSPage() {
     if (!voidReason.trim()) { setVoidError('Indicá el motivo.'); return }
     if (!/^[0-9]{4,6}$/.test(voidPin)) { setVoidError('El PIN del supervisor es de 4 a 6 números.'); return }
     setVoiding(true)
-    const { error } = await supabase.rpc('anular_comanda_with_pin', {
+    const { error } = await supabase.rpc('void_sale_with_pin', {
       p_sale_id: lastSaleId, p_reason: voidReason.trim(), p_pin: voidPin,
     })
     setVoiding(false)
@@ -394,7 +393,7 @@ export default function POSPage() {
     setVoidPin('')
     setLastSaleId(null)
     setLastTicket(null)
-    setVoidedMsg('Comanda anulada. El stock se devolvió solo.')
+    setVoidedMsg('Venta anulada. El stock se devolvió solo.')
     fetchProducts()
     setTimeout(() => setVoidedMsg(''), 4000)
   }
@@ -402,17 +401,17 @@ export default function POSPage() {
   return (
     <div className="p-6 h-full">
       <div className="flex items-center justify-between mb-4 gap-3">
-        <h1 className="text-2xl font-bold text-white">Despacho</h1>
+        <h1 className="text-2xl font-bold text-white">Punto de Venta</h1>
         <div className="flex items-center gap-2">
           {voidedMsg && (
             <span className="text-sm text-emerald-400 flex items-center gap-1.5"><CheckCircle className="w-4 h-4" /> {voidedMsg}</span>
           )}
           {lastTicket && (
             <button
-              onClick={() => printComandaTicket({ ...lastTicket, reprint: true }, brand)}
+              onClick={() => printTicket({ ...lastTicket, reprint: true }, brand)}
               className="flex items-center gap-2 text-sm text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-2 rounded-xl"
             >
-              <Printer className="w-4 h-4" /> Reimprimir última comanda
+              <Printer className="w-4 h-4" /> Reimprimir último ticket
             </button>
           )}
           {canAskVoid && (
@@ -420,18 +419,18 @@ export default function POSPage() {
               onClick={() => { setVoidError(''); setVoidReason(''); setVoidPin(''); setVoidOpen(true) }}
               className="flex items-center gap-2 text-sm text-red-400 hover:text-red-300 bg-slate-800 hover:bg-red-500/10 border border-red-500/30 px-3 py-2 rounded-xl"
             >
-              <Ban className="w-4 h-4" /> Anular esta comanda
+              <Ban className="w-4 h-4" /> Anular esta venta
             </button>
           )}
         </div>
       </div>
 
-      {/* Anular última comanda: pide motivo y el PIN de un supervisor */}
+      {/* Anular última venta: pide motivo y el PIN de un supervisor */}
       {voidOpen && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5 w-full max-w-sm space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-white font-semibold flex items-center gap-2"><Ban className="w-4 h-4 text-red-400" /> Anular última comanda</h2>
+              <h2 className="text-white font-semibold flex items-center gap-2"><Ban className="w-4 h-4 text-red-400" /> Anular última venta</h2>
               <button onClick={() => setVoidOpen(false)} className="text-slate-400 hover:text-white"><X className="w-4 h-4" /></button>
             </div>
             <p className="text-xs text-slate-400">
@@ -531,7 +530,7 @@ export default function POSPage() {
 
       {registerId === null && (
         <div className="mb-4 flex items-center justify-between gap-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded-xl px-4 py-3 text-sm">
-          <span className="flex items-center gap-2"><Lock className="w-4 h-4" /> La caja está cerrada. Para despachar, primero hay que abrirla.</span>
+          <span className="flex items-center gap-2"><Lock className="w-4 h-4" /> La caja está cerrada. Para cobrar, primero hay que abrirla.</span>
           <Link href="/caja" className="font-semibold underline underline-offset-2 hover:text-amber-200">Ir a Caja</Link>
         </div>
       )}
@@ -790,7 +789,7 @@ export default function POSPage() {
                 </>
               )}
               {customerId && (
-                <p className="text-xs text-slate-500 mt-1.5">Así queda asociada la comanda para recordatorios de recompra y, si hace falta, para fiarla en caja.</p>
+                <p className="text-xs text-slate-500 mt-1.5">Así queda asociada la venta para recordatorios de recompra y, si hace falta, para fiarla.</p>
               )}
             </div>
 
@@ -834,6 +833,28 @@ export default function POSPage() {
               )}
             </div>
 
+            <div className="bg-slate-800 border border-slate-700 rounded-2xl p-4 space-y-2">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Método de pago</p>
+              <Select value={payMethod} onValueChange={v => setPayMethod(v || 'efectivo')}>
+                <SelectTrigger className="bg-slate-900 border-slate-700 text-white w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectItem value="efectivo">Efectivo</SelectItem>
+                  <SelectItem value="debito">Débito</SelectItem>
+                  <SelectItem value="credito">Crédito</SelectItem>
+                  <SelectItem value="transferencia">Transferencia</SelectItem>
+                  <SelectItem value="qr">QR</SelectItem>
+                  {customerId && <SelectItem value="fiado">Fiado</SelectItem>}
+                </SelectContent>
+              </Select>
+              {payMethod === 'fiado' && (
+                <p className="text-xs text-amber-400">
+                  Queda a cuenta de {customerName}. No suma al efectivo de la caja.
+                </p>
+              )}
+            </div>
+
             <div className="bg-slate-800 rounded-xl border border-slate-700 p-4 space-y-1.5 text-sm">
               <div className="flex justify-between text-slate-400">
                 <span>Subtotal neto</span><span>{fmt(subtotal - iva)}</span>
@@ -847,7 +868,7 @@ export default function POSPage() {
                 </div>
               )}
               <div className="flex justify-between font-bold text-base pt-2 border-t border-slate-700">
-                <span className="text-white">A COBRAR EN CAJA</span>
+                <span className="text-white">A COBRAR</span>
                 <span className="text-emerald-400">{fmt(total)}</span>
               </div>
               {obraSocial && (
@@ -857,25 +878,21 @@ export default function POSPage() {
               )}
             </div>
 
-            <p className="text-xs text-slate-500 text-center -mt-1">
-              El método de pago (incluido fiado) se elige en Caja al cobrar la comandera.
-            </p>
-
             {saleError && (
               <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-2">{saleError}</p>
             )}
 
             {success ? (
               <Button className="w-full bg-emerald-500 text-white gap-2 py-6" disabled>
-                <CheckCircle className="w-5 h-5" /> ¡Comanda despachada!
+                <CheckCircle className="w-5 h-5" /> ¡Venta registrada!
               </Button>
             ) : (
               <Button
                 className="w-full bg-emerald-500 hover:bg-emerald-400 text-white text-base py-6 font-semibold shadow-lg shadow-emerald-500/20"
-                onClick={handleDespachar}
+                onClick={handleSale}
                 disabled={cart.length === 0 || processing || registerId === null}
               >
-                {processing ? 'Despachando...' : `Despachar — ${fmt(total)}`}
+                {processing ? 'Cobrando...' : `Cobrar ${fmt(total)}`}
               </Button>
             )}
           </div>

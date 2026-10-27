@@ -28,12 +28,11 @@ import { isCajeroBlocked } from '@/lib/roles'
 
 const allNavItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, permKey: null },
-  { href: '/pos', label: 'Despacho', icon: ShoppingCart, permKey: 'pos' as SectionKey },
+  { href: '/pos', label: 'Punto de Venta', icon: ShoppingCart, permKey: 'pos' as SectionKey },
   { href: '/productos', label: 'Productos', icon: Package, permKey: 'productos' as SectionKey },
   { href: '/stock', label: 'Stock', icon: BarChart3, permKey: 'stock' as SectionKey },
   { href: '/clientes', label: 'Clientes', icon: Users, permKey: 'clientes' as SectionKey },
   { href: '/caja', label: 'Caja', icon: Landmark, permKey: 'caja' as SectionKey },
-  { href: '/cobros', label: 'Cobros', icon: Receipt, permKey: 'caja' as SectionKey },
   { href: '/historial', label: 'Historial', icon: History, permKey: 'historial' as SectionKey },
   { href: '/comandas', label: 'Comandas', icon: Receipt, permKey: 'historial' as SectionKey },
   { href: '/reportes', label: 'Reportes', icon: BarChart2, permKey: 'reportes' as SectionKey },
