@@ -6,7 +6,7 @@ import { ObraSocial } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
-import { Receipt, Clock, User, CheckCircle, Ban, X, Lock } from 'lucide-react'
+import { Receipt, Clock, User, CheckCircle, Ban, X, Lock, Check } from 'lucide-react'
 import Link from 'next/link'
 import { useAuth } from '@/context/AuthContext'
 import { useBranding } from '@/context/BrandingContext'
@@ -67,6 +67,13 @@ export default function CobrosPage() {
   const [cobrando, setCobrando] = useState(false)
   const [cobroError, setCobroError] = useState('')
   const [cobradoMsg, setCobradoMsg] = useState('')
+
+  // Cobro rápido: checkbox en la tarjeta, sin abrir el detalle completo
+  const [quickId, setQuickId] = useState<string | null>(null)
+  const [quickDetail, setQuickDetail] = useState<ComandaDetalle | null>(null)
+  const [quickMethod, setQuickMethod] = useState('efectivo')
+  const [quickLoading, setQuickLoading] = useState(false)
+  const [quickError, setQuickError] = useState('')
 
   // Anulación
   const [voidOpen, setVoidOpen] = useState(false)
@@ -193,6 +200,82 @@ export default function CobrosPage() {
     fetchPendientes()
   }
 
+  // Checkbox rápido: trae el detalle de la comanda (cliente/obra social
+  // ya asociados, sin tocarlos) para poder cobrarla con un par de clics,
+  // sin pasar por el cuadro completo.
+  async function abrirCobroRapido(c: ComandaResumen) {
+    setQuickError('')
+    setQuickId(c.id)
+    setQuickDetail(null)
+    setQuickLoading(true)
+    const { data, error } = await supabase.rpc('detalle_comanda', { p_sale_id: c.id })
+    setQuickLoading(false)
+    if (error || !data) {
+      setQuickError(error?.message || 'No se pudo abrir la comanda.')
+      return
+    }
+    const d = data as ComandaDetalle
+    setQuickDetail(d)
+    setQuickMethod('efectivo')
+  }
+
+  function cancelarCobroRapido() {
+    setQuickId(null)
+    setQuickDetail(null)
+    setQuickError('')
+  }
+
+  async function confirmarCobroRapido() {
+    if (!quickDetail || quickLoading) return
+    setQuickError('')
+    if (quickMethod === 'fiado' && !quickDetail.customer_id) {
+      setQuickError('Para fiar hace falta un cliente asociado a la comanda.')
+      return
+    }
+    setQuickLoading(true)
+    const { data: result, error } = await supabase.rpc('cobrar_comanda', {
+      p_sale_id: quickDetail.id,
+      p_payment_method: quickMethod,
+      p_customer_id: quickDetail.customer_id || null,
+      p_obra_social_id: quickDetail.obra_social_id || null,
+      p_porcentaje_cobertura: quickDetail.porcentaje_cobertura,
+    })
+    setQuickLoading(false)
+    if (error || !result) {
+      setQuickError(error?.message || 'No se pudo cobrar la comanda.')
+      return
+    }
+    const r = result as { id: string; invoice_number: number; created_at: string; total: number; tax: number; neto: number; valor_cobertura: number }
+
+    const ticket: TicketData = {
+      invoiceNumber: r.invoice_number,
+      date: new Date(r.created_at ?? Date.now()),
+      items: quickDetail.lines.map(l => ({
+        name: l.name,
+        qtyLabel: l.is_fraccion
+          ? `${Math.round(l.quantity * (l.unidades_por_envase || 1))} ${l.nombre_fraccion || 'unidad'}${Math.round(l.quantity * (l.unidades_por_envase || 1)) !== 1 ? 's' : ''}`
+          : `${parseFloat(l.quantity.toFixed(4))} caja${l.quantity !== 1 ? 's' : ''}`,
+        unitPrice: l.unit_price,
+        subtotal: l.subtotal,
+      })),
+      neto: Number(r.neto),
+      iva: Number(r.tax),
+      total: Number(r.total),
+      paymentMethod: quickMethod,
+      cashier: profile?.name,
+      obraSocialNombre: quickDetail.obra_social_nombre || undefined,
+      valorCobertura: Number(r.valor_cobertura) || 0,
+    }
+    const printer = loadPrinterConfig()
+    if (printer.autoPrint) printTicket(ticket, brand, printer)
+
+    setCobradoMsg(`Comanda #${r.invoice_number} cobrada (${METODO_LABEL[quickMethod] ?? quickMethod}).`)
+    setTimeout(() => setCobradoMsg(''), 4000)
+    setQuickId(null)
+    setQuickDetail(null)
+    fetchPendientes()
+  }
+
   async function handleVoid() {
     if (!selected) return
     setVoidError('')
@@ -238,26 +321,84 @@ export default function CobrosPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {pendientes.map(c => (
-            <button
-              key={c.id}
-              onClick={() => abrirComanda(c.id)}
-              className="text-left bg-slate-800 border border-slate-700 hover:border-emerald-500/50 hover:bg-slate-700/60 rounded-2xl p-4 transition-colors"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-bold text-white">Comanda #{c.invoice_number}</span>
-                <span className="text-xs text-slate-500 flex items-center gap-1">
-                  <Clock className="w-3.5 h-3.5" />
-                  {new Date(c.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
-                </span>
+          {pendientes.map(c => {
+            const quickOpen = quickId === c.id
+            return (
+              <div
+                key={c.id}
+                className={`bg-slate-800 border rounded-2xl p-4 transition-colors ${quickOpen ? 'border-emerald-500/60' : 'border-slate-700 hover:border-emerald-500/50 hover:bg-slate-700/60'}`}
+              >
+                <div className="flex items-start gap-2">
+                  <button
+                    onClick={() => quickOpen ? cancelarCobroRapido() : abrirCobroRapido(c)}
+                    title="Marcar como cobrada"
+                    className={`mt-0.5 w-5 h-5 rounded-md border flex items-center justify-center flex-shrink-0 transition-colors ${quickOpen ? 'bg-emerald-500 border-emerald-500' : 'border-slate-600 hover:border-emerald-500'}`}
+                  >
+                    {quickOpen && <Check className="w-3.5 h-3.5 text-white" />}
+                  </button>
+                  <button onClick={() => abrirComanda(c.id)} className="flex-1 min-w-0 text-left">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-bold text-white">Comanda #{c.invoice_number}</span>
+                      <span className="text-xs text-slate-500 flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5" />
+                        {new Date(c.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    {c.customer_name && (
+                      <p className="text-xs text-slate-400 flex items-center gap-1 mb-1"><User className="w-3 h-3" /> {c.customer_name}</p>
+                    )}
+                    <p className="text-xs text-slate-500 mb-2">{c.items_count} ítem{c.items_count !== 1 ? 's' : ''}</p>
+                    <p className="text-lg font-bold text-emerald-400">{fmt(c.total)}</p>
+                  </button>
+                </div>
+
+                {quickOpen && (
+                  <div className="mt-3 pt-3 border-t border-slate-700 space-y-2">
+                    {quickLoading && !quickDetail ? (
+                      <p className="text-xs text-slate-500">Cargando...</p>
+                    ) : (
+                      <>
+                        <Select
+                          value={quickMethod}
+                          onValueChange={v => {
+                            const next = v ?? quickMethod
+                            setQuickMethod(next === 'fiado' && !quickDetail?.customer_id ? 'efectivo' : next)
+                          }}
+                        >
+                          <SelectTrigger className="bg-slate-900 border-slate-700 text-white h-9 text-sm">
+                            <span>{METODO_LABEL[quickMethod] ?? quickMethod}</span>
+                          </SelectTrigger>
+                          <SelectContent className="bg-slate-800 border-slate-700">
+                            <SelectItem value="efectivo">Efectivo</SelectItem>
+                            <SelectItem value="debito">Débito</SelectItem>
+                            <SelectItem value="credito">Crédito</SelectItem>
+                            <SelectItem value="transferencia">Transferencia</SelectItem>
+                            <SelectItem value="qr">QR / Billetera virtual</SelectItem>
+                            {quickDetail?.customer_id && <SelectItem value="fiado">Fiado</SelectItem>}
+                          </SelectContent>
+                        </Select>
+                        {quickError && (
+                          <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg px-2 py-1.5">{quickError}</p>
+                        )}
+                        <div className="flex gap-2">
+                          <button onClick={cancelarCobroRapido} className="flex-1 text-xs text-slate-300 hover:text-white bg-slate-900 border border-slate-700 rounded-lg py-2">
+                            Cancelar
+                          </button>
+                          <button
+                            onClick={confirmarCobroRapido}
+                            disabled={quickLoading}
+                            className="flex-1 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 rounded-lg py-2"
+                          >
+                            {quickLoading ? 'Cobrando...' : 'Confirmar cobro'}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
-              {c.customer_name && (
-                <p className="text-xs text-slate-400 flex items-center gap-1 mb-1"><User className="w-3 h-3" /> {c.customer_name}</p>
-              )}
-              <p className="text-xs text-slate-500 mb-2">{c.items_count} ítem{c.items_count !== 1 ? 's' : ''}</p>
-              <p className="text-lg font-bold text-emerald-400">{fmt(c.total)}</p>
-            </button>
-          ))}
+            )
+          })}
         </div>
       )}
 
