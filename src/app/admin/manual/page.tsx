@@ -33,8 +33,9 @@ const SECCIONES = [
   { id: 'alertas', titulo: '17. Alertas' },
   { id: 'configuracion', titulo: '18. Configuración' },
   { id: 'respaldo', titulo: '19. Respaldo de la base de datos' },
-  { id: 'seguridad', titulo: '20. Por qué está armado así (seguridad y antifraude)' },
-  { id: 'reiniciar', titulo: '21. Reiniciar la app' },
+  { id: 'actualizar-precios', titulo: '20. Actualizar precios desde archivo (droguería)' },
+  { id: 'seguridad', titulo: '21. Por qué está armado así (seguridad y antifraude)' },
+  { id: 'reiniciar', titulo: '22. Reiniciar la app' },
 ]
 
 function Seccion({ id, titulo, children }: { id: string; titulo: string; children: React.ReactNode }) {
@@ -183,7 +184,14 @@ export default function ManualPage() {
         <p>No incluye los usuarios ni sus contraseñas/PIN, ni las credenciales de facturación electrónica (ARCA): esos se manejan aparte, desde Usuarios y Configuración.</p>
       </Seccion>
 
-      <Seccion id="seguridad" titulo="20. Por qué está armado así (seguridad y antifraude)">
+      <Seccion id="actualizar-precios" titulo="20. Actualizar precios desde archivo (droguería)">
+        <p>No hay una conexión automática en tiempo real con las droguerías: cada una da lo que puede (algunas un Excel o CSV desde su portal, algunas por mail, otras nada). Esta pantalla sirve para cargar ese archivo y que la app actualice los precios sola, sin tipear nada a mano.</p>
+        <p>Se sube el archivo (Excel o CSV), se elige qué columna tiene el <b>código de barras</b> y qué columnas tienen el <b>precio de costo</b> y/o el <b>precio de venta</b> (se puede actualizar uno solo o los dos). La app matchea cada fila contra el catálogo por código de barras.</p>
+        <p>Antes de tocar nada se muestra una <b>vista previa</b>: qué productos cambian (precio actual → nuevo), cuáles quedan igual, y qué códigos del archivo no están en el catálogo (para revisar si falta cargarles el código de barras). Se puede destildar algún producto puntual antes de confirmar. Recién al apretar "Confirmar" se actualizan los precios.</p>
+        <p>Cada precio que cambia así queda anotado en la Auditoría de cambios de precio (sección 15), igual que si se editara a mano desde Productos.</p>
+      </Seccion>
+
+      <Seccion id="seguridad" titulo="21. Por qué está armado así (seguridad y antifraude)">
         <p>La idea general detrás de varias de estas decisiones: separar "quien hace la tarea" de "quien controla que la tarea se hizo bien", para que ninguna persona sola pueda tocar algo y además borrar el rastro de que lo tocó.</p>
         <ul className="list-disc pl-5 space-y-1">
           <li>Los cajeros no ven cuánto "debería" haber en caja, para que no ajusten el conteo a ese número.</li>
@@ -193,7 +201,7 @@ export default function ManualPage() {
         </ul>
       </Seccion>
 
-      <Seccion id="reiniciar" titulo="21. Reiniciar la app (Panel Admin → Reiniciar la app)">
+      <Seccion id="reiniciar" titulo="22. Reiniciar la app (Panel Admin → Reiniciar la app)">
         <p>Pensado para el momento en que se termina el período de prueba y se quiere arrancar a operar con todo en cero. Borra productos, categorías, obras sociales, proveedores, compras, clientes, lotes, ventas, caja, movimientos de stock, auditoría de precios, alertas, y las fotos de productos y de facturas.</p>
         <p><b className="text-white">No</b> borra los usuarios ni la configuración del negocio (marca, ticket, ARCA) — así se puede seguir entrando a la app normalmente después.</p>
         <p>Solo lo puede hacer un superadmin, y pide dos confirmaciones: escribir una frase exacta y poner la contraseña de superadmin. Es irreversible — no hay un "deshacer" para esto.</p>
