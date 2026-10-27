@@ -35,6 +35,7 @@ const allNavItems = [
   { href: '/caja', label: 'Caja', icon: Landmark, permKey: 'caja' as SectionKey },
   { href: '/cobros', label: 'Cobros', icon: Receipt, permKey: 'caja' as SectionKey },
   { href: '/historial', label: 'Historial', icon: History, permKey: 'historial' as SectionKey },
+  { href: '/comandas', label: 'Comandas', icon: Receipt, permKey: 'historial' as SectionKey },
   { href: '/reportes', label: 'Reportes', icon: BarChart2, permKey: 'reportes' as SectionKey },
   { href: '/recetas-pendientes', label: 'Recetas pendientes', icon: HeartPulse, permKey: 'reportes' as SectionKey },
   { href: '/auditoria-precios', label: 'Auditoría de precios', icon: ScrollText, permKey: 'reportes' as SectionKey },

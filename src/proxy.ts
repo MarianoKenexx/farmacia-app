@@ -11,6 +11,7 @@ const ROUTE_PERMISSIONS: Record<string, string> = {
   '/caja': 'caja',
   '/cobros': 'caja',
   '/historial': 'historial',
+  '/comandas': 'historial',
   '/reportes': 'reportes',
 }
 

@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { supabase } from '@/lib/supabase'
-import { Users, Tag, ShoppingBag, Activity, BookOpen, Trash2 } from 'lucide-react'
+import { Users, Tag, ShoppingBag, Activity, BookOpen, Trash2, DatabaseBackup } from 'lucide-react'
 import Link from 'next/link'
 
 export default function AdminPage() {
@@ -84,6 +84,15 @@ export default function AdminPage() {
           <h3 className="font-semibold text-slate-400 text-lg mb-1">Reportes avanzados</h3>
           <p className="text-slate-500 text-sm">Próximamente</p>
         </div>
+
+        <Link
+          href="/admin/respaldo"
+          className="bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-emerald-500/50 rounded-2xl p-6 transition-all group"
+        >
+          <DatabaseBackup className="w-8 h-8 text-emerald-400 mb-4" />
+          <h3 className="font-semibold text-white text-lg mb-1">Respaldo de la base de datos</h3>
+          <p className="text-slate-400 text-sm">Exportar todo a un archivo, o importar un respaldo guardado</p>
+        </Link>
 
         <Link
           href="/admin/reiniciar"
