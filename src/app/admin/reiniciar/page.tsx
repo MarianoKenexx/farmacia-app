@@ -169,6 +169,13 @@ export default function ReiniciarPage() {
               value={frase}
               onChange={e => setFrase(e.target.value)}
               placeholder={FRASE_CONFIRMACION}
+              name="frase-confirmacion-reinicio"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              data-1p-ignore
+              data-lpignore="true"
               className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-600 font-mono"
             />
             <input
@@ -176,6 +183,10 @@ export default function ReiniciarPage() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               placeholder="Tu contraseña"
+              name="password-confirmacion-reinicio"
+              autoComplete="new-password"
+              data-1p-ignore
+              data-lpignore="true"
               className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500"
             />
             {error && <p className="text-sm text-red-400">{error}</p>}
