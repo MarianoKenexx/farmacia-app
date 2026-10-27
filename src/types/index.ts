@@ -18,6 +18,7 @@ export interface Product {
   image_url?: string
   unidades_por_envase?: number
   nombre_fraccion?: string
+  precio_fraccion?: number | null
   tipo_venta: 'libre' | 'receta' | 'receta_archivada'
   dias_tratamiento?: number | null
   active: boolean

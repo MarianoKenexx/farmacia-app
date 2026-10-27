@@ -23,7 +23,7 @@ import { Plus, Search, Pencil, Trash2, PackageX, ImageIcon, X } from 'lucide-rea
 const emptyProduct = {
   name: '', barcode: '', category_id: '', laboratory: '',
   purchase_price: 0, sale_price: 0, stock: 0, min_stock: 5, iva_rate: 21, active: true,
-  image_url: '', unidades_por_envase: 1, nombre_fraccion: 'unidad', tipo_venta: 'libre' as Product['tipo_venta'],
+  image_url: '', unidades_por_envase: 1, nombre_fraccion: 'unidad', precio_fraccion: '', tipo_venta: 'libre' as Product['tipo_venta'],
   dias_tratamiento: '',
 }
 
@@ -77,6 +77,7 @@ export default function ProductosPage() {
       image_url: p.image_url ?? '',
       unidades_por_envase: p.unidades_por_envase ?? 1,
       nombre_fraccion: p.nombre_fraccion ?? 'unidad',
+      precio_fraccion: p.precio_fraccion ?? '',
       tipo_venta: p.tipo_venta ?? 'libre',
       dias_tratamiento: p.dias_tratamiento ?? '',
     })
@@ -139,6 +140,8 @@ export default function ProductosPage() {
       active: form.active,
       unidades_por_envase: uPorE,
       nombre_fraccion: uPorE > 1 ? (form.nombre_fraccion || 'unidad') : 'unidad',
+      precio_fraccion: uPorE > 1 && form.precio_fraccion !== '' && form.precio_fraccion != null
+        ? Number(form.precio_fraccion) : null,
       tipo_venta: form.tipo_venta || 'libre',
       dias_tratamiento: form.dias_tratamiento ? parseInt(form.dias_tratamiento) || null : null,
     }
@@ -467,11 +470,30 @@ export default function ProductosPage() {
                       />
                     </div>
                   )}
+                  {uPorE > 1 && (
+                    <div className="col-span-2">
+                      <Label>Precio por unidad suelta (opcional)</Label>
+                      <Input
+                        type="number"
+                        placeholder={`Si lo dejás vacío, se cobra ${fmt((Number(form.sale_price) || 0) / uPorE)} (caja ÷ unidades)`}
+                        value={form.precio_fraccion}
+                        onChange={e => setForm({...form, precio_fraccion: e.target.value})}
+                      />
+                      <p className="text-xs text-slate-400 mt-1">
+                        Poné un precio acá solo si la unidad suelta se cobra distinto a la parte proporcional de la caja
+                        (por ejemplo, más cara para no incentivar que la fraccionen). Dejalo vacío para que se calcule solo.
+                      </p>
+                    </div>
+                  )}
                 </div>
                 {uPorE > 1 && (
                   <div className="text-xs text-slate-500 bg-white rounded-lg p-2 border border-slate-200">
                     💊 En el POS aparecerán dos botones: <strong>Caja completa</strong> ({fmt(Number(form.sale_price) || 0)}) y{' '}
-                    <strong>1 {form.nombre_fraccion || 'unidad'}</strong> ({fmt((Number(form.sale_price) || 0) / uPorE)})
+                    <strong>1 {form.nombre_fraccion || 'unidad'}</strong> ({fmt(
+                      form.precio_fraccion !== '' && form.precio_fraccion != null
+                        ? Number(form.precio_fraccion)
+                        : (Number(form.sale_price) || 0) / uPorE
+                    )})
                   </div>
                 )}
               </div>

@@ -110,6 +110,7 @@ export default function ManualPage() {
 
       <Seccion id="productos" titulo="5. Productos">
         <p>Alta, baja y edición de productos: nombre, laboratorio, categoría, código de barras, precio de costo, precio de venta, IVA, stock mínimo (para alertas), unidades por envase (para fraccionar) y tipo de venta (libre / receta / receta archivada).</p>
+        <p>Si el producto se fracciona, se puede cargar además un <b>precio por unidad suelta</b> (opcional). Si se deja vacío, la unidad suelta sale a la parte proporcional de la caja (precio de caja ÷ unidades); si se carga un valor, se cobra siempre ese precio fijo al vender por unidad, sin importar el precio de la caja.</p>
         <p>Cualquier cambio de precio de venta o de costo queda anotado automáticamente en la Auditoría de precios (sección 15), aunque se edite el producto desde acá.</p>
         <p>La foto del producto se achica y comprime sola apenas se la carga (antes de subirla), para no gastar de más el espacio de almacenamiento con fotos de celular pesadas.</p>
       </Seccion>

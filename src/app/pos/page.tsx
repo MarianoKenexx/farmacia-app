@@ -130,6 +130,22 @@ export default function POSPage() {
       )
     : []
 
+  // Precio real de 1 unidad suelta: el que se cargó a mano si existe,
+  // si no la división proporcional de la caja (como siempre funcionó).
+  function fraccionUnitPrice(product: Product) {
+    const uPorE = product.unidades_por_envase ?? 1
+    return product.precio_fraccion != null ? product.precio_fraccion : product.sale_price / uPorE
+  }
+
+  // Precio "equivalente a 1 caja" según cómo se esté vendiendo — es lo que
+  // hay que multiplicar por la cantidad (en unidades de caja) para el
+  // subtotal real, tanto si la fracción es proporcional como si no.
+  function perBoxUnitPrice(product: Product, isFraccion: boolean) {
+    if (!isFraccion) return product.sale_price
+    const uPorE = product.unidades_por_envase ?? 1
+    return fraccionUnitPrice(product) * uPorE
+  }
+
   // Adds product to cart as FULL BOX (1 caja) or as a SINGLE FRACTION
   function addToCart(product: Product, asFraccion = false) {
     const uPorE = product.unidades_por_envase ?? 1
@@ -138,8 +154,9 @@ export default function POSPage() {
     // qty in stock units (fraccion = 1/uPorE of a caja)
     const qty = asFraccion ? (1 / uPorE) : 1
     const unitPrice = asFraccion
-      ? product.sale_price / uPorE
+      ? fraccionUnitPrice(product)
       : product.sale_price
+    const boxUnitPrice = perBoxUnitPrice(product, asFraccion)
 
     const cartKey = `${product.id}_${asFraccion ? 'f' : 'c'}`
 
@@ -149,14 +166,14 @@ export default function POSPage() {
         const newQty = parseFloat((exists.quantity + qty).toFixed(4))
         return prev.map(i =>
           i.product.id === product.id && i.is_fraccion === asFraccion
-            ? { ...i, quantity: newQty, subtotal: parseFloat((newQty * product.sale_price).toFixed(2)) }
+            ? { ...i, quantity: newQty, subtotal: parseFloat((newQty * boxUnitPrice).toFixed(2)) }
             : i
         )
       }
       return [...prev, {
         product,
         quantity: qty,
-        subtotal: parseFloat((qty * product.sale_price).toFixed(2)),
+        subtotal: parseFloat((qty * boxUnitPrice).toFixed(2)),
         unit_price: unitPrice,
         is_fraccion: asFraccion,
         // Por defecto, solo entran en el descuento de obra social los productos
@@ -237,8 +254,8 @@ export default function POSPage() {
         .map(i => {
           if (i.product.id !== productId || i.is_fraccion !== isFraccion) return i
           const newQty = parseFloat((i.quantity + delta).toFixed(4))
-          const uPorE = i.product.unidades_por_envase ?? 1
-          return { ...i, quantity: newQty, subtotal: parseFloat((newQty * i.product.sale_price).toFixed(2)) }
+          const boxUnitPrice = perBoxUnitPrice(i.product, i.is_fraccion)
+          return { ...i, quantity: newQty, subtotal: parseFloat((newQty * boxUnitPrice).toFixed(2)) }
         })
         .filter(i => i.quantity > 0)
     )
@@ -251,8 +268,8 @@ export default function POSPage() {
         if (i.product.id !== productId || i.is_fraccion !== isFraccion) return i
         const qty = parseFloat(val)
         if (isNaN(qty) || qty <= 0) return { ...i, quantity: 0 }
-        const uPorE = i.product.unidades_por_envase ?? 1
-        return { ...i, quantity: qty, subtotal: parseFloat((qty * i.product.sale_price).toFixed(2)) }
+        const boxUnitPrice = perBoxUnitPrice(i.product, i.is_fraccion)
+        return { ...i, quantity: qty, subtotal: parseFloat((qty * boxUnitPrice).toFixed(2)) }
       }).filter(i => i.quantity > 0)
     )
   }
@@ -630,7 +647,7 @@ export default function POSPage() {
                               <Pill className="w-3.5 h-3.5 text-slate-300" />
                               <span className="text-xs font-semibold text-white">1 {nombreFrac}</span>
                             </div>
-                            <span className="text-xs font-bold text-slate-200">{fmt(p.sale_price / uPorE)}</span>
+                            <span className="text-xs font-bold text-slate-200">{fmt(fraccionUnitPrice(p))}</span>
                           </button>
                         )}
                       </div>
